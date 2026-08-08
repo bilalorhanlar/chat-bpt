@@ -86,6 +86,18 @@ Yeni fotoğraf eklerken `photo/` klasörüne atıp `npm run photos` çalıştır
 yeterli; dönük olan varsa `01-trim.py` içindeki `ROTATIONS` tablosuna sırasını
 yazın.
 
+3B zar modeli (`public/3d/dice.glb`) depoda hazır duruyor. Yeniden üretmek
+gerekirse `obj2gltf` bağımlılık olarak eklenmeden çalıştırılabilir:
+
+```bash
+npx obj2gltf -i 3d/dice.obj -o public/3d/dice.glb
+npx @gltf-transform/cli simplify public/3d/dice.glb public/3d/dice.glb --error 0.0004
+npx @gltf-transform/cli quantize public/3d/dice.glb public/3d/dice.glb
+```
+
+Bağımlılık olarak tutulmuyordu çünkü `obj2gltf`, `cesium`'u (≈50 MB, Node 22+
+isteyen) sürüklüyor ve dağıtım kurulumunu gereksiz yere şişiriyordu.
+
 ## Dağıtım (Railway)
 
 `railway.json` hazır. Servise şu değişkenler gerekiyor:
@@ -96,3 +108,18 @@ yazın.
 
 Dağıtım komutu önce `prisma migrate deploy` çalıştırıp sonra sunucuyu açıyor.
 İlk dağıtımdan sonra bir kez `npm run db:seed` gerekiyor.
+
+### Bağımlılıklar neden böyle bölünmüş
+
+Railway kurulumu `npm ci`'yi dev bağımlılıkları atlayarak çalıştırabiliyor.
+Bu yüzden **derleme ve çalışma için gereken her şey `dependencies` içinde**:
+
+- `tsx` — `npm start` sunucuyu bununla çalıştırıyor
+- `typescript`, `@types/*` — `next build` tip denetimi yapıyor
+- `tailwindcss`, `@tailwindcss/postcss` — stiller derleme anında üretiliyor
+
+`devDependencies` yalnızca gerçekten yerelde kalanları taşıyor: `eslint`,
+`eslint-config-next` ve fotoğraf boru hattının kullandığı `sharp`.
+
+Node sürümü `engines` ve `.nvmrc` ile 22'ye sabitlendi — Railway'in varsayılanı
+18 ve Next 16 en az 20.9 istiyor.
