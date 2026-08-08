@@ -39,6 +39,17 @@ export function emitMatchState(matchId: string, payload: unknown) {
   io()?.to(matchRoom(matchId)).emit("match:state", payload);
 }
 
+/**
+ * Rakip katıldı, maç başlıyor.
+ *
+ * Ayrı bir olay olması gerekiyor: bekleyen taraf yalnızca durum değil, sayfayı
+ * komple tazelemeli — `status` sunucu bileşeninde okunuyor ve bekleme ekranını
+ * o karar veriyor.
+ */
+export function emitMatchStarted(matchId: string) {
+  io()?.to(matchRoom(matchId)).emit("match:started");
+}
+
 export function emitToUser(userId: string, event: string, payload: unknown) {
   io()?.to(`user:${userId}`).emit(event, payload);
 }

@@ -17,12 +17,13 @@ import {
   canAct,
   createMatch,
   finishMatch,
+  joinOrCreateOnlineMatch,
   loadMatch,
   recordMove,
   rollDice,
   saveState,
 } from "@/lib/match";
-import { emitMatchState } from "@/lib/realtime";
+import { emitMatchStarted, emitMatchState } from "@/lib/realtime";
 import { requireSession } from "@/lib/session";
 
 /**
@@ -53,6 +54,7 @@ async function withMatch(
 
   if (!match || match.game !== "TAVLA") return fail("Maç bulunamadı.");
   if (match.status === "FINISHED") return fail("Bu maç bitti.");
+  if (match.status === "WAITING") return fail("Rakip henüz katılmadı.");
 
   const state = match.state as TavlaState;
   const seat = match.seats[session.user];
@@ -62,27 +64,50 @@ async function withMatch(
   return handler({ state, seat, user: session.user, match });
 }
 
-/** Yeni maç açar ve kimin başlayacağını belirler. */
-export async function createTavlaMatch(mode: "ONLINE" | "LOCAL"): Promise<string> {
-  const session = await requireSession();
-
+/** Kimin başlayacağını belirleyip ilk zarı atmış bir başlangıç durumu üretir. */
+function freshState(): TavlaState {
   // Açılış zarı: iki farklı değer atılana kadar; büyük olan başlar.
   let opening = rollDice();
   while (opening[0] === opening[1]) opening = rollDice();
   const starter: Player = opening[0] > opening[1] ? 0 : 1;
 
   const now = Date.now();
-  // Zar otomatik: maç açılırken ilk tur zarı da atılır, oyuncu düğmeye basmaz.
-  const state = roll(initialState(starter, now), rollDice(), now);
+  // Zar otomatik: oyuncu düğmeye basmaz.
+  return roll(initialState(starter, now), rollDice(), now);
+}
 
-  const id = await createMatch({
+/**
+ * Maç açar.
+ *
+ * Online modda önce karşı tarafın bekleyen odası aranıyor; varsa ona katılıyor.
+ * Böyle olmasaydı ikisi de "Online oyna"ya bastığında iki ayrı oda açılıp
+ * herkes kendi odasında tek başına oynuyordu.
+ */
+export async function createTavlaMatch(mode: "ONLINE" | "LOCAL"): Promise<string> {
+  const session = await requireSession();
+
+  if (mode === "LOCAL") {
+    const id = await createMatch({
+      game: "TAVLA",
+      mode,
+      creator: session.user,
+      state: freshState(),
+      status: "ACTIVE",
+    });
+    revalidatePath("/oyunlar/tavla");
+    return id;
+  }
+
+  const { id, joined } = await joinOrCreateOnlineMatch({
     game: "TAVLA",
-    mode,
-    creator: session.user,
-    state,
-    status: "ACTIVE",
+    user: session.user,
+    createState: freshState,
+    // Bekleyen oda saatlerin akmasını beklemesin: rakip katıldığı an zar ve
+    // tur sayacı sıfırdan başlar.
+    onStart: () => freshState(),
   });
 
+  if (joined) emitMatchStarted(id);
   revalidatePath("/oyunlar/tavla");
   return id;
 }

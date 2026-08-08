@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { IsimSehirGame } from "@/components/games/isim-sehir/isim-sehir-game";
+import { WaitingRoom } from "@/components/games/waiting-room";
 import { PageShell } from "@/components/layout/page-shell";
 import type { IsimSehirState } from "@/games/isim-sehir/types";
 import { loadMatch } from "@/lib/match";
-import { getPeople } from "@/lib/people";
+import { getPeople, partnerOf } from "@/lib/people";
 import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "İsim Şehir" };
@@ -25,6 +26,21 @@ export default async function IsimSehirMatchPage({
 
   if (!match || match.game !== "ISIM_SEHIR") notFound();
   if (match.seats[session.user] === undefined) notFound();
+
+  // Rakip katılmadan tahta açılmaz — yoksa herkes kendi odasında tek başına
+  // oynar ve iki ayrı maç oluşurdu.
+  if (match.status === "WAITING") {
+    return (
+      <PageShell title="İsim Şehir" eyebrow="online" back="/oyunlar/isim-sehir">
+        <WaitingRoom
+          matchId={match.id}
+          gameTitle="İsim Şehir"
+          partnerName={people[partnerOf(session.user)].name}
+          backHref="/oyunlar/isim-sehir"
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell

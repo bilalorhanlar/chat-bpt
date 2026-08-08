@@ -16,11 +16,18 @@ import type { PersonKey } from "@/config/site";
  * `onState` her karede değişen bir kapanış olabildiği için ref'te tutuluyor;
  * bağımlılığa koymak her render'da yeniden bağlanmaya yol açardı.
  */
-export function useMatchChannel<T>(matchId: string, onState: (state: T) => void) {
+export function useMatchChannel<T>(
+  matchId: string,
+  onState: (state: T) => void,
+  /** Rakip katılıp maç başladığında çağrılır (genelde `router.refresh`). */
+  onStarted?: () => void,
+) {
   const [online, setOnline] = useState<Partial<Record<PersonKey, boolean>>>({});
   const [connected, setConnected] = useState(false);
   const handler = useRef(onState);
   handler.current = onState;
+  const startedHandler = useRef(onStarted);
+  startedHandler.current = onStarted;
 
   useEffect(() => {
     if (!matchId) return;
@@ -34,6 +41,7 @@ export function useMatchChannel<T>(matchId: string, onState: (state: T) => void)
     socket.on("disconnect", () => setConnected(false));
 
     socket.on("match:state", (state: T) => handler.current(state));
+    socket.on("match:started", () => startedHandler.current?.());
 
     socket.on("match:presence", (payload: { user: PersonKey; online: boolean }) => {
       setOnline((current) => ({ ...current, [payload.user]: payload.online }));

@@ -22,10 +22,11 @@ export default async function IsimSehirLobbyPage() {
         title="İsim Şehir Hayvan Bitki Eşya"
         blurb={`${TOTAL_ROUNDS} tur. Harf çekilir, süre başlar, puanı birbirinize verirsiniz.`}
         basePath="/oyunlar/isim-sehir"
-        openMatch={open ? { id: open.id, mode: open.mode } : null}
+        openMatch={open ? { id: open.id, mode: open.mode, status: open.status } : null}
         createMatch={createIsimSehirMatch}
         partnerName={people[partnerOf(session.user)].name}
         rules={[
+          "Online seçince rakip katılana kadar süre başlamaz; ikiniz de bastığınızda aynı odada buluşursunuz.",
           "Kelimeleri sözlük değil, karşı taraf onaylar — geçersiz saydığına çarpı koyar.",
           "Yalnız bulan 10, ikiniz de aynı kelimeyi yazdıysanız 5, boş 0 puan.",
           "Harfle başlamayan cevaplar oy beklemeden geçersiz sayılır.",

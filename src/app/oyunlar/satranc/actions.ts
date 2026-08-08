@@ -16,11 +16,12 @@ import {
   canAct,
   createMatch,
   finishMatch,
+  joinOrCreateOnlineMatch,
   loadMatch,
   recordMove,
   saveState,
 } from "@/lib/match";
-import { emitMatchState } from "@/lib/realtime";
+import { emitMatchStarted, emitMatchState } from "@/lib/realtime";
 import { requireSession } from "@/lib/session";
 
 /**
@@ -46,15 +47,37 @@ function initialState(now: number): SatrancState {
   };
 }
 
+/**
+ * Maç açar.
+ *
+ * Online modda karşı tarafın bekleyen odası varsa ona katılır; yoksa bekleyen
+ * bir oda açar. Aksi hâlde ikisi de "Online oyna"ya bastığında iki ayrı oda
+ * açılıp herkes tek başına kalıyordu.
+ */
 export async function createSatrancMatch(mode: "ONLINE" | "LOCAL"): Promise<string> {
   const session = await requireSession();
-  const id = await createMatch({
+
+  if (mode === "LOCAL") {
+    const id = await createMatch({
+      game: "SATRANC",
+      mode,
+      creator: session.user,
+      state: initialState(Date.now()),
+      status: "ACTIVE",
+    });
+    revalidatePath("/oyunlar/satranc");
+    return id;
+  }
+
+  const { id, joined } = await joinOrCreateOnlineMatch({
     game: "SATRANC",
-    mode,
-    creator: session.user,
-    state: initialState(Date.now()),
-    status: "ACTIVE",
+    user: session.user,
+    createState: () => initialState(Date.now()),
+    // Saat beklerken akmasın: rakip katıldığı an 5:00'dan başlar.
+    onStart: () => initialState(Date.now()),
   });
+
+  if (joined) emitMatchStarted(id);
   revalidatePath("/oyunlar/satranc");
   return id;
 }
@@ -74,6 +97,7 @@ export async function makeSatrancMove(input: z.infer<typeof MoveInput>): Promise
   const match = await loadMatch(parsed.data.matchId);
   if (!match || match.game !== "SATRANC") return fail("Maç bulunamadı.");
   if (match.status === "FINISHED") return fail("Bu maç bitti.");
+  if (match.status === "WAITING") return fail("Rakip henüz katılmadı.");
 
   const state = match.state as SatrancState;
   const mover = sideToMove(state);
@@ -146,6 +170,7 @@ export async function claimSatrancTimeout(matchId: string): Promise<ActionResult
   const match = await loadMatch(matchId);
   if (!match || match.game !== "SATRANC") return fail("Maç bulunamadı.");
   if (match.status === "FINISHED") return fail("Bu maç bitti.");
+  if (match.status === "WAITING") return fail("Rakip henüz katılmadı.");
 
   const state = match.state as SatrancState;
   const mover = sideToMove(state);

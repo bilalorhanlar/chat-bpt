@@ -29,8 +29,8 @@ export function GameLobby({
   title: string;
   blurb: string;
   rules: string[];
-  /** Devam edilebilecek maç. */
-  openMatch: { id: string; mode: string } | null;
+  /** Devam edilebilecek ya da rakip bekleyen maç. */
+  openMatch: { id: string; mode: string; status: string } | null;
   /** `/oyunlar/tavla` gibi. */
   basePath: string;
   createMatch: (mode: "ONLINE" | "LOCAL") => Promise<string>;
@@ -63,13 +63,17 @@ export function GameLobby({
       {openMatch ? (
         <Link
           href={`${basePath}/${openMatch.id}`}
-          className="mb-4 flex items-center gap-3 rounded-card border border-brand-200 bg-brand-50/70 px-5 py-4 shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-lift"
+          className="mb-4 flex items-center gap-3 rounded-card border border-ink bg-white px-5 py-4 shadow-soft transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-lift"
         >
           <Play className="size-5 shrink-0 text-brand-600" strokeWidth={1.8} aria-hidden />
           <span className="flex-1">
-            <span className="block font-medium text-ink">Yarım kalan maç var</span>
+            <span className="block font-medium text-ink">
+              {openMatch.status === "WAITING" ? "Açık davetin var" : "Yarım kalan maç var"}
+            </span>
             <span className="block text-[0.82rem] text-ink-soft">
-              {openMatch.mode === "LOCAL" ? "Aynı cihazda" : "Online"} · devam et
+              {openMatch.status === "WAITING"
+                ? `${partnerName} bekleniyor · odaya dön`
+                : `${openMatch.mode === "LOCAL" ? "Aynı cihazda" : "Online"} · devam et`}
             </span>
           </span>
         </Link>

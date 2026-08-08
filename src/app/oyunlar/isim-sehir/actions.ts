@@ -18,8 +18,15 @@ import {
   type Category,
   type IsimSehirState,
 } from "@/games/isim-sehir/types";
-import { canAct, createMatch, finishMatch, loadMatch, saveState } from "@/lib/match";
-import { emitMatchState } from "@/lib/realtime";
+import {
+  canAct,
+  createMatch,
+  finishMatch,
+  joinOrCreateOnlineMatch,
+  loadMatch,
+  saveState,
+} from "@/lib/match";
+import { emitMatchStarted, emitMatchState } from "@/lib/realtime";
 import { requireSession } from "@/lib/session";
 
 type ActionResult = { ok: true; state: IsimSehirState } | { ok: false; error: string };
@@ -37,15 +44,36 @@ function deadlineFor(mode: "ONLINE" | "LOCAL"): number | null {
   return mode === "ONLINE" ? Date.now() + ROUND_SECONDS * 1000 : null;
 }
 
+/**
+ * Maç açar.
+ *
+ * Online modda karşı tarafın bekleyen odasına katılır; yoksa bekleyen oda açar.
+ * Böylece ikisi ayrı odada tek başına kalmıyor.
+ */
 export async function createIsimSehirMatch(mode: "ONLINE" | "LOCAL"): Promise<string> {
   const session = await requireSession();
-  const id = await createMatch({
+
+  if (mode === "LOCAL") {
+    const id = await createMatch({
+      game: "ISIM_SEHIR",
+      mode,
+      creator: session.user,
+      state: initialState(drawLetter(), deadlineFor(mode)),
+      status: "ACTIVE",
+    });
+    revalidatePath("/oyunlar/isim-sehir");
+    return id;
+  }
+
+  const { id, joined } = await joinOrCreateOnlineMatch({
     game: "ISIM_SEHIR",
-    mode,
-    creator: session.user,
-    state: initialState(drawLetter(), deadlineFor(mode)),
-    status: "ACTIVE",
+    user: session.user,
+    createState: () => initialState(drawLetter(), deadlineFor("ONLINE")),
+    // Süre beklerken akmasın: rakip katıldığı an 90 saniye baştan başlar.
+    onStart: () => initialState(drawLetter(), deadlineFor("ONLINE")),
   });
+
+  if (joined) emitMatchStarted(id);
   revalidatePath("/oyunlar/isim-sehir");
   return id;
 }
@@ -74,7 +102,7 @@ export async function submitIsimSehirAnswers(
   const session = await requireSession();
   const match = await loadMatch(parsed.data.matchId);
   if (!match || match.game !== "ISIM_SEHIR") return fail("Maç bulunamadı.");
-  if (match.status === "FINISHED") return fail("Bu maç bitti.");
+  if (match.status !== "ACTIVE") return fail("Maç sürmüyor.");
 
   const state = match.state as IsimSehirState;
   if (state.phase !== "yazma") return fail("Yazma süresi bitti.");
@@ -117,7 +145,7 @@ export async function submitIsimSehirVotes(
   const session = await requireSession();
   const match = await loadMatch(parsed.data.matchId);
   if (!match || match.game !== "ISIM_SEHIR") return fail("Maç bulunamadı.");
-  if (match.status === "FINISHED") return fail("Bu maç bitti.");
+  if (match.status !== "ACTIVE") return fail("Maç sürmüyor.");
 
   const state = match.state as IsimSehirState;
   if (state.phase !== "onay") return fail("Şu an oylama yok.");
@@ -160,7 +188,7 @@ export async function advanceIsimSehirRound(matchId: string): Promise<ActionResu
   const session = await requireSession();
   const match = await loadMatch(matchId);
   if (!match || match.game !== "ISIM_SEHIR") return fail("Maç bulunamadı.");
-  if (match.status === "FINISHED") return fail("Bu maç bitti.");
+  if (match.status !== "ACTIVE") return fail("Maç sürmüyor.");
 
   const state = match.state as IsimSehirState;
   if (state.phase !== "sonuc") return fail("Tur henüz bitmedi.");

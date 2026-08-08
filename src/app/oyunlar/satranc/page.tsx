@@ -21,10 +21,11 @@ export default async function SatrancLobbyPage() {
         title="Satranç"
         blurb="Beşer dakika, ekleme yok. Süresi biten kaybeder."
         basePath="/oyunlar/satranc"
-        openMatch={open ? { id: open.id, mode: open.mode } : null}
+        openMatch={open ? { id: open.id, mode: open.mode, status: open.status } : null}
         createMatch={createSatrancMatch}
         partnerName={people[partnerOf(session.user)].name}
         rules={[
+          "Online seçince rakip katılana kadar saat başlamaz; ikiniz de bastığınızda aynı odada buluşursunuz.",
           "Süre 5+0: her oyuncuya 5 dakika, hamle başına ekleme yok.",
           "Süresi biten kaybeder — kararı sunucu verir, sekmen kapalı olsa da işler.",
           "Rok, geçerken alma ve terfi dahil bütün kurallar geçerli.",

@@ -21,11 +21,12 @@ export default async function TavlaLobbyPage() {
         title="Tavla"
         blurb="Zarı at, pulları topla, mars yapmaya çalış."
         basePath="/oyunlar/tavla"
-        openMatch={open ? { id: open.id, mode: open.mode } : null}
+        openMatch={open ? { id: open.id, mode: open.mode, status: open.status } : null}
         createMatch={createTavlaMatch}
         partnerName={people[partnerOf(session.user)].name}
         rules={[
-          "Zarları sunucu atıyor — kimse zarını seçemez.",
+          "Online seçince rakip katılana kadar oyun başlamaz; ikiniz de bastığınızda aynı odada buluşursunuz.",
+          "Zar her turda otomatik atılıyor — sunucu atar, kimse zarını seçemez.",
           "Oynanabilecek en çok zarı oynamak zorunludur; tek zar oynanabiliyorsa büyük olan.",
           "Rakip hiç pul toplayamadan biterse mars (2 puan), bar'da ya da evinde pulu kaldıysa hamars (3 puan).",
           "Her turun bir süre göstergesi var ama süre dolunca hiçbir şey olmuyor — sadece acele ettirir.",

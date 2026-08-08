@@ -46,13 +46,25 @@ export async function createMatch(input: {
   status?: MatchStatus;
 }): Promise<string> {
   const other = partnerKey(input.creator);
+
+  /*
+   * Koltuk kaydı "kim gerçekten odada" demek.
+   *
+   * WAITING açılan online maçta yalnızca açan kişinin koltuğu yazılır; karşı
+   * tarafınki katıldığında eklenir. Eskiden ikisi de baştan yazılıyordu ve
+   * "rakibin bekleyen odası var mı?" sorgusu kişinin **kendi** odasını
+   * buluyordu — herkes kendi odasına katılıp tek başına oynuyordu.
+   */
+  const waitingForOpponent = input.mode === "ONLINE" && input.status === "WAITING";
   const seats: Array<{ userId: PersonKey; seat: number }> =
     input.mode === "LOCAL"
       ? PERSON_KEYS.map((key, index) => ({ userId: key, seat: index }))
-      : [
-          { userId: input.creator, seat: 0 },
-          { userId: other, seat: 1 },
-        ];
+      : waitingForOpponent
+        ? [{ userId: input.creator, seat: 0 }]
+        : [
+            { userId: input.creator, seat: 0 },
+            { userId: other, seat: 1 },
+          ];
 
   const match = await db.gameMatch.create({
     data: {
@@ -93,6 +105,84 @@ export async function loadMatch(id: string): Promise<LoadedMatch | null> {
     bySeat,
     ply: row._count.moves,
   };
+}
+
+/**
+ * Online maça katılır; yoksa yeni bir bekleyen oda açar.
+ *
+ * Bu fonksiyon olmadan iki kişi de "Online oyna"ya bastığında iki ayrı oda
+ * açılıyor ve herkes kendi odasında tek başına kalıyordu. Kural basit:
+ * karşı tarafın açtığı **bekleyen** bir oda varsa ona katıl, yenisini açma.
+ *
+ * `status` alanı buradaki tek doğruluk kaynağı:
+ *   WAITING → rakip henüz katılmadı, oyun başlamadı
+ *   ACTIVE  → ikisi de içeride, oyun sürüyor
+ *
+ * `onStart` maç gerçekten başlarken çağrılır; saatlerin ve tur süresinin
+ * bekleme boyunca akmaması için başlangıç durumu o anda tazelenir.
+ */
+export async function joinOrCreateOnlineMatch(input: {
+  game: Game;
+  user: PersonKey;
+  /** Yeni oda açılırsa kullanılacak başlangıç durumu. */
+  createState: () => unknown;
+  /** Bekleyen odaya katılırken durumu "şimdi başlıyor" hâline getirir. */
+  onStart?: (state: unknown) => unknown;
+}): Promise<{ id: string; joined: boolean }> {
+  const other = partnerKey(input.user);
+
+  // Kendi bekleyen odam varsa yenisini açma, ona geri dön. Bu kontrol
+  // önce gelmeli: aksi hâlde arka arkaya basan kişi kendi odasına "katılıyor".
+  const mine = await db.gameMatch.findFirst({
+    where: {
+      game: input.game,
+      mode: "ONLINE",
+      status: "WAITING",
+      players: { some: { userId: input.user } },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (mine) return { id: mine.id, joined: false };
+
+  // Karşı tarafın açtığı, ben içinde olmadığım bekleyen oda var mı?
+  const waiting = await db.gameMatch.findFirst({
+    where: {
+      game: input.game,
+      mode: "ONLINE",
+      status: "WAITING",
+      players: { some: { userId: other } },
+      NOT: { players: { some: { userId: input.user } } },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, state: true },
+  });
+
+  if (waiting) {
+    // Koltuğu şimdi ekle: karşı taraf gerçekten odaya girdi.
+    await db.$transaction([
+      db.matchPlayer.create({
+        data: { matchId: waiting.id, userId: input.user, seat: 1 },
+      }),
+      db.gameMatch.update({
+        where: { id: waiting.id },
+        data: {
+          status: "ACTIVE",
+          state: (input.onStart ? input.onStart(waiting.state) : waiting.state) as never,
+        },
+      }),
+    ]);
+    return { id: waiting.id, joined: true };
+  }
+
+  const id = await createMatch({
+    game: input.game,
+    mode: "ONLINE",
+    creator: input.user,
+    state: input.createState(),
+    status: "WAITING",
+  });
+  return { id, joined: false };
 }
 
 /**
@@ -163,6 +253,6 @@ export async function findOpenMatch(game: Game, user: PersonKey) {
       players: { some: { userId: user } },
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, mode: true, createdAt: true },
+    select: { id: true, mode: true, status: true, createdAt: true },
   });
 }
