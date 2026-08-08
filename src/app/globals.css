@@ -1,0 +1,251 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Tasarım token'ları
+   Beyaz zemin, mor birincil, yumuşak gül ikincil aksan.
+   Tek kaynak burasıdır; bileşenler ham renk yazmaz.
+--------------------------------------------------------------------------- */
+@theme {
+  --color-canvas: #fbfaff;
+  --color-surface: #ffffff;
+  --color-line: #ece8f8;
+  --color-line-strong: #ded6f7;
+  --color-ink: #1a1523;
+  --color-ink-soft: #6b6478;
+  --color-ink-faint: #9a94a8;
+
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #4c1d95;
+
+  --color-accent-200: #f8d4fe;
+  --color-accent-300: #f0abfc;
+  --color-accent-400: #e879f9;
+  --color-accent-500: #d946ef;
+
+  --color-good: #16a34a;
+  --color-bad: #e11d48;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1.5rem;
+  --radius-btn: 0.875rem;
+
+  --shadow-soft: 0 1px 2px rgb(76 29 149 / 0.05), 0 10px 30px -18px rgb(76 29 149 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(76 29 149 / 0.06), 0 20px 48px -22px rgb(76 29 149 / 0.28);
+  --shadow-glow: 0 10px 40px -12px rgb(139 92 246 / 0.45);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Temel
+--------------------------------------------------------------------------- */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Yatay kaymayı kökten engelle: aurora blob'ları taşabilir. */
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    font-optical-sizing: auto;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-200);
+    color: var(--color-brand-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* iOS'ta 16px altı input'a odaklanınca sayfa zoom'lar. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+
+  /* Kaydırma çubuğu — masaüstünde temaya uysun. */
+  @media (pointer: fine) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-brand-200) transparent;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Yardımcılar
+--------------------------------------------------------------------------- */
+@utility text-balance-tr {
+  text-wrap: balance;
+}
+
+/** GPU katmanına al — sürekli transform animasyonu olan elemanlar için. */
+@utility gpu {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@utility no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Animasyonlar
+   Kural: yalnızca transform ve opacity. blur() değeri asla animasyonlanmaz —
+   her karede yeniden hesaplanır ve mobilde kare düşürür.
+--------------------------------------------------------------------------- */
+
+@keyframes aurora-a {
+  0%,
+  100% {
+    transform: translate3d(-12%, -6%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8%, 10%, 0) scale(1.18);
+  }
+}
+
+@keyframes aurora-b {
+  0%,
+  100% {
+    transform: translate3d(10%, 8%, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-8%, -10%, 0) scale(0.92);
+  }
+}
+
+@keyframes aurora-c {
+  0%,
+  100% {
+    transform: translate3d(0, 12%, 0) scale(0.95);
+  }
+  50% {
+    transform: translate3d(6%, -8%, 0) scale(1.15);
+  }
+}
+
+/** Ana sayfa iz efekti: içteki <img> bunu oynatır, konum dıştaki div'de. */
+@keyframes trail-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.62);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  28% {
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/** Yanlış PIN geri bildirimi. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-7px, 0, 0);
+  }
+  40% {
+    transform: translate3d(6px, 0, 0);
+  }
+  60% {
+    transform: translate3d(-4px, 0, 0);
+  }
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Hareket azaltma
+   Sistem ayarı "azalt" ise dekoratif hareketi tamamen kapat.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

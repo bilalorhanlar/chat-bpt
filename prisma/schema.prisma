@@ -1,0 +1,213 @@
+// Railway Postgres + Prisma
+//
+// Şemanın iki kuralı var:
+//  1. İki kullanıcı sabittir (`bilal`, `partner`) ve tohumla oluşturulur.
+//     Kayıt/davet akışı yok.
+//  2. Oyun durumu `GameMatch.state` içinde JSON olarak durur. Dört oyunun
+//     durumu birbirine hiç benzemiyor (tavla: tahta+zar+bar, satranç:
+//     FEN+saatler, isim-şehir: harf+cevaplar) ve her zaman tek parça okunup
+//     tek parça yazılıyor. Dört ayrı tablo dört kat şema ve dört kat sorgu
+//     olurdu. Tip güvenliği `src/games/*/types.ts` ve yazma anındaki Zod
+//     doğrulamasıyla sağlanıyor.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Game {
+  TAVLA
+  SATRANC
+  ISIM_SEHIR
+  HAFIZA
+}
+
+enum MatchMode {
+  ONLINE
+  LOCAL
+}
+
+enum MatchStatus {
+  WAITING
+  ACTIVE
+  FINISHED
+  ABANDONED
+}
+
+enum ListType {
+  YILLIK
+  EVLILIK
+  GIDILECEK
+  IZLENECEK
+}
+
+model User {
+  id       String   @id // "bilal" | "partner"
+  name     String
+  birthday DateTime @db.Date
+  accent   String
+
+  matches        MatchPlayer[]
+  wonMatches     GameMatch[]      @relation("winner")
+  moves          Move[]
+  listItems      ListItem[]
+  countdowns     Countdown[]
+  answers        QuestionAnswer[]
+  lettersSent    Letter[]         @relation("sender")
+  lettersGot     Letter[]         @relation("recipient")
+}
+
+model GameMatch {
+  id     String      @id @default(cuid())
+  game   Game
+  mode   MatchMode
+  status MatchStatus @default(WAITING)
+
+  /// Oyuna özel otoriter durum. Şekli `src/games/<oyun>/types.ts` içinde.
+  state Json
+
+  winnerId String?
+  winner   User?   @relation("winner", fields: [winnerId], references: [id])
+
+  /// MAT | PAT | SURE | MARS | HAMARS | NORMAL | TERK
+  result String?
+
+  /// Şampiyona puanı: normal 1, mars 2, hamars 3.
+  scoreDelta Int @default(1)
+
+  /// Hafıza oyununun süresi (rekor tablosu için). Diğer oyunlarda null.
+  durationMs Int?
+
+  players MatchPlayer[]
+  moves   Move[]
+
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([game, status])
+  @@index([finishedAt])
+}
+
+model MatchPlayer {
+  matchId String
+  match   GameMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User      @relation(fields: [userId], references: [id])
+
+  /// Tavlada 0 = beyaz, satrançta 0 = beyaz.
+  seat Int
+
+  @@id([matchId, userId])
+  @@index([userId])
+}
+
+model Move {
+  id      String    @id @default(cuid())
+  matchId String
+  match   GameMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User      @relation(fields: [userId], references: [id])
+
+  /// Kaçıncı yarı hamle (0'dan başlar).
+  ply Int
+
+  /// Satranç: { from, to, promotion }. Tavla: { dice, steps }.
+  data Json
+
+  /// Hamleden sonra oyuncunun kalan süresi (ms). Süresiz oyunlarda null.
+  msLeft Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([matchId, ply])
+}
+
+model ListItem {
+  id    String   @id @default(cuid())
+  list  ListType
+  title String
+  note  String?
+
+  /// İzlenecekler için { kind: "dizi" | "film", year?: number }.
+  meta Json?
+
+  done   Boolean   @default(false)
+  doneAt DateTime?
+
+  /// Elle sıralama; küçük olan üstte.
+  order Int @default(0)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([list, done, order])
+}
+
+model Countdown {
+  id    String   @id @default(cuid())
+  title String
+  date  DateTime @db.Date
+  emoji String?
+
+  /// Yıldönümü mü — her yıl tekrar eder (doğum günü, yıldönümü).
+  repeatYearly Boolean @default(false)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model DailyQuestion {
+  id   String   @id @default(cuid())
+  date DateTime @unique @db.Date
+  text String
+
+  answers QuestionAnswer[]
+}
+
+model QuestionAnswer {
+  id         String        @id @default(cuid())
+  questionId String
+  question   DailyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+
+  text      String
+  createdAt DateTime @default(now())
+
+  @@unique([questionId, userId])
+}
+
+model Letter {
+  id     String @id @default(cuid())
+  fromId String
+  from   User   @relation("sender", fields: [fromId], references: [id])
+  toId   String
+  to     User   @relation("recipient", fields: [toId], references: [id])
+
+  title String
+  body  String
+
+  /// Bu tarihten önce içerik istemciye hiç gönderilmez.
+  openAt   DateTime
+  openedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([toId, openAt])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
