@@ -1,7 +1,8 @@
 import type { Server, Socket } from "socket.io";
 
-import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
 import type { PersonKey } from "@/config/site";
+import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
+import { matchRoom, setIoServer } from "@/lib/realtime";
 
 /** Kimliği doğrulanmış soket — `data.user` her zaman doludur. */
 export type GameSocket = Socket & { data: { user: PersonKey } };
@@ -18,9 +19,15 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return out;
 }
 
+/**
+ * Soket katmanı bilerek "aptal": oyun kuralı bilmiyor, durum değiştirmiyor.
+ * Tek işi maç odalarına üyelik ve varlık (kimin bağlı olduğu) bildirimi.
+ * Bütün kural doğrulaması sunucu eylemlerinde (`src/app/oyunlar/**`) yapılıyor
+ * ve yeni durum `emitMatchState` ile buradan yayınlanıyor.
+ */
 export function registerRealtime(io: Server) {
-  // Bağlantı kurulmadan kimlik doğrula. Aynı JWT çerezini HTTP tarafındaki
-  // middleware de okuyor; soket için ayrı bir jeton mekanizması yok.
+  setIoServer(io);
+
   io.use(async (socket, nextFn) => {
     const cookies = parseCookies(socket.handshake.headers.cookie);
     const session = await readSessionToken(cookies[SESSION_COOKIE]);
@@ -31,19 +38,33 @@ export function registerRealtime(io: Server) {
 
   io.on("connection", (socket) => {
     const s = socket as GameSocket;
-
-    // Herkes kendi kişisel odasına girer: "sıra sende" gibi bildirimler
-    // maç odasından bağımsız olarak buraya gönderilebiliyor.
     void s.join(`user:${s.data.user}`);
 
-    // Maç işleyicileri Faz 3'te bağlanacak (tavla), Faz 4'te satranç.
-    registerMatchHandlers(io, s);
-  });
-}
+    s.on("match:join", (matchId: unknown) => {
+      if (typeof matchId !== "string" || matchId.length === 0) return;
+      void s.join(matchRoom(matchId));
+      // Karşı tarafa "buradayım" de — arayüz çevrimiçi rozetini buna göre yakar.
+      s.to(matchRoom(matchId)).emit("match:presence", { user: s.data.user, online: true });
+    });
 
-/** Faz 3'te dolacak: maça katılma, hamle, saat. */
-function registerMatchHandlers(_io: Server, socket: GameSocket) {
-  socket.on("ping:test", (cb?: (payload: unknown) => void) => {
-    cb?.({ ok: true, user: socket.data.user, at: Date.now() });
+    s.on("match:leave", (matchId: unknown) => {
+      if (typeof matchId !== "string") return;
+      void s.leave(matchRoom(matchId));
+      s.to(matchRoom(matchId)).emit("match:presence", { user: s.data.user, online: false });
+    });
+
+    /** Karşı taraf odaya girdiğinde ona "ben de buradayım" diye cevap verilir. */
+    s.on("match:ping", (matchId: unknown) => {
+      if (typeof matchId !== "string") return;
+      s.to(matchRoom(matchId)).emit("match:presence", { user: s.data.user, online: true });
+    });
+
+    s.on("disconnecting", () => {
+      for (const room of s.rooms) {
+        if (room.startsWith("match:")) {
+          s.to(room).emit("match:presence", { user: s.data.user, online: false });
+        }
+      }
+    });
   });
 }

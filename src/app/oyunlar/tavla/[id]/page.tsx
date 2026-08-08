@@ -1,0 +1,46 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+
+import { TavlaGame } from "@/components/games/tavla/tavla-game";
+import { PageShell } from "@/components/layout/page-shell";
+import type { PersonKey } from "@/config/site";
+import type { TavlaState } from "@/games/tavla/types";
+import { loadMatch } from "@/lib/match";
+import { getPeople } from "@/lib/people";
+import { requireSession } from "@/lib/session";
+
+export const metadata: Metadata = { title: "Tavla" };
+export const dynamic = "force-dynamic";
+
+export default async function TavlaMatchPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [session, people, match] = await Promise.all([
+    requireSession(),
+    getPeople(),
+    loadMatch(id),
+  ]);
+
+  if (!match || match.game !== "TAVLA") notFound();
+  if (match.seats[session.user] === undefined) notFound();
+
+  const seats: Record<number, PersonKey> = match.bySeat;
+
+  return (
+    <PageShell
+      title="Tavla"
+      eyebrow={match.mode === "LOCAL" ? "aynı cihazda" : "online"}
+      back="/oyunlar/tavla"
+      wide
+    >
+      <TavlaGame
+        matchId={match.id}
+        initialState={match.state as TavlaState}
+        mode={match.mode}
+        seats={seats}
+        me={session.user}
+        people={people}
+        finished={match.status === "FINISHED"}
+      />
+    </PageShell>
+  );
+}
