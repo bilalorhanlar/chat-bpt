@@ -34,6 +34,6 @@ export const config = {
      * `anilar`, `ses` ve `3d` public altındaki varlıklar — kilit ekranındaki
      * arka plan da onlardan besleniyor.
      */
-    "/((?!api/giris|api/cikis|_next/static|_next/image|favicon.ico|anilar|ses|3d).*)",
+    "/((?!api/giris|api/cikis|api/saglik|_next/static|_next/image|favicon.ico|anilar|ses|3d|image).*)",
   ],
 };

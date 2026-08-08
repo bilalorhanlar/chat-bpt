@@ -25,7 +25,19 @@ process.env.TZ ||= "Europe/Istanbul";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
-const hostname = process.env.HOSTNAME ?? "0.0.0.0";
+
+/**
+ * Dinlenecek adres.
+ *
+ * `HOSTNAME` **kullanılmaz**: Docker ve Railway bu değişkeni konteyner
+ * kimliğine ayarlıyor (`a1b2c3d4e5f6` gibi). Onu adres sanıp bağlanmaya
+ * çalışınca sunucu `getaddrinfo ENOTFOUND` ile açılışta çöküyor ve
+ * sağlık kontrolü başarısız oluyor.
+ *
+ * Konteynerde her zaman tüm arayüzleri dinlemek gerekiyor; geliştirmede
+ * gerekirse `HOST` ile daraltılabilir.
+ */
+const hostname = process.env.HOST ?? "0.0.0.0";
 
 async function main() {
   const app = next({ dev, hostname, port });
