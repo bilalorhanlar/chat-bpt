@@ -1,67 +1,56 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { BAR, OFF, type Move, type Player, type TavlaState } from "@/games/tavla/types";
 import { cn } from "@/lib/utils";
 
 /**
- * Tavla tahtası.
+ * Tavla tahtası — ahşap/nötr palet, mor yalnızca seçim vurgusunda.
  *
  * ### Ölçüler
- * Her şey tahta kutusunun yüzdesi olarak hesaplanıyor ve kutunun en-boy oranı
- * sabit (1.45). Böylece tahta 320 px'lik telefondan 900 px'lik masaüstüne
- * kadar tek bir kodla ölçekleniyor; ayrı mobil düzen yok.
+ * Her şey tahta kutusunun yüzdesi; kutunun en-boy oranı sabit (1.45). Tahta
+ * telefondan masaüstüne tek kodla ölçekleniyor.
  *
- * Oran şuradan geliyor: bir yarım sütuna üst üste 5 pul sığmalı.
- * Pul çapı genişliğin %6'sı → yükseklikte %6 × oran. 5 × 6 × 1.45 = %43.5,
- * kullanılabilir yarım sütun ise %47.5. Sığıyor.
+ * İKİ AYRI KOORDİNAT SİSTEMİ VAR:
+ *   *_BOARD sabitleri tahta kutusunun yüzdesi (sütun konumları).
+ *   *_LOCAL sabitleri hane sütununun kendi yüzdesi (pul yerleşimi) — pullar
+ *   sütunun içinde konumlandığı için CSS yüzdeleri sütuna göre çözülüyor.
  *
  * ### Etkileşim
- * Sürükle-bırak yok: dokunmatikte sürükleme sayfa kaydırmasıyla çakışıyor ve
- * 25 px'lik bir pulu parmakla sürüklemek zor. Onun yerine "kaynağa dokun →
- * hedefe dokun". Dokunma alanı pul değil, **tüm hane sütunu** — yani 25×130 px
- * gibi rahat bir hedef.
+ * İki yol birden çalışıyor:
+ *   1. Dokun-dokun: kaynağa dokun → hedefe dokun.
+ *   2. Sürükle-bırak: pulu tut, hedefe bırak. Pointer olaylarıyla; sürükleme
+ *      sırasında hayalet pul imleci izliyor (doğrudan DOM, render yok) ve
+ *      `touch-action: none` sayfa kaydırmasını bastırıyor.
+ * Bırakma hedefi `document.elementFromPoint` ile bulunuyor — hedef büyütmesi
+ * yok, çünkü sütunların tamamı zaten dokunma hedefi.
  */
 
-/*
- * İKİ AYRI KOORDİNAT SİSTEMİ VAR — karıştırmak kolay:
- *
- *   "board" ile biten sabitler tahta kutusunun yüzdesi. Hane sütunlarının
- *   konumu ve genişliği bunlarla veriliyor.
- *
- *   "local" ile biten sabitler **hane sütununun kendi** yüzdesi. Pullar
- *   sütunun içinde konumlandığı için CSS yüzdeleri sütuna göre çözülüyor;
- *   buraya tahta yüzdesi yazmak pulları görünmez derecede küçültüyor.
- */
-const ASPECT = 1.45; // tahta en/boy
+const ASPECT = 1.45;
 
-const FRAME = 2; // çerçeve payı (% tahta genişliği)
-const POINT_W = 6.53; // hane genişliği (% tahta genişliği)
+const FRAME = 2;
+const POINT_W = 6.53;
 const BAR_W = POINT_W * 1.3;
 const TRAY_W = POINT_W * 1.4;
-const HALF_H = 47.5; // yarım sütun yüksekliği (% tahta yüksekliği)
+const HALF_H = 47.5;
 
-const CHECKER_W_BOARD = POINT_W * 0.92; // pul çapı (% tahta genişliği)
-const CHECKER_H_BOARD = CHECKER_W_BOARD * ASPECT; // aynı çap (% tahta yüksekliği)
+const CHECKER_W_BOARD = POINT_W * 0.92;
+const CHECKER_H_BOARD = CHECKER_W_BOARD * ASPECT;
 
-/** Pul çapı, hane sütununun genişliğinin yüzdesi olarak. */
 const CHECKER_W_LOCAL = 92;
-/** Pul çapı, hane sütununun yüksekliğinin yüzdesi olarak. */
 const CHECKER_H_LOCAL = (CHECKER_H_BOARD / HALF_H) * 100;
-/** Bar tam yükseklikte olduğu için oradaki dikey birim tahta yüzdesiyle aynı. */
 const CHECKER_W_BAR_LOCAL = (CHECKER_W_BOARD / BAR_W) * 100;
 
 const QUADRANT_B_X = FRAME + 6 * POINT_W + BAR_W;
 const TRAY_X = FRAME + 12 * POINT_W + BAR_W;
 const BAR_X = FRAME + 6 * POINT_W;
 
+/** Sürükleme sayılması için gereken piksel — altı dokunma kabul edilir. */
+const DRAG_THRESHOLD = 8;
+
 type Slot = { index: number; x: number; top: boolean };
 
-/**
- * Ekrandaki yerleşim: 13–18 üst sol, 19–24 üst sağ, 12–7 alt sol, 6–1 alt sağ.
- * (Dizin = hane numarası − 1.)
- */
 const SLOTS: Slot[] = [
   ...[12, 13, 14, 15, 16, 17].map((index, i) => ({ index, x: FRAME + i * POINT_W, top: true })),
   ...[18, 19, 20, 21, 22, 23].map((index, i) => ({
@@ -75,13 +64,9 @@ const SLOTS: Slot[] = [
 
 export type BoardProps = {
   state: TavlaState;
-  /** Bu tarayıcının oyuncusu; kendi pulları vurgulanır. */
   me: Player;
-  /** Seçili kaynak hane (yoksa null). */
   selected: number | null;
-  /** Seçili kaynaktan gidilebilecek hedefler. */
   targets: Move[];
-  /** Şu an hamle yapılabilen kaynak haneler. */
   sources: number[];
   onSelect: (index: number) => void;
   onMoveTo: (to: number) => void;
@@ -101,28 +86,132 @@ export function TavlaBoard({
   const targetSet = useMemo(() => new Set(targets.map((m) => m.to)), [targets]);
   const sourceSet = useMemo(() => new Set(sources), [sources]);
 
-  const handleClick = (index: number) => {
-    if (disabled) return;
-    if (selected !== null && targetSet.has(index)) return onMoveTo(index);
-    if (sourceSet.has(index)) return onSelect(index);
-  };
+  const boardRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{
+    from: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    player: Player;
+  } | null>(null);
+
+  // Callback'ler pointer dinleyicilerinde ref üzerinden okunur; her render'da
+  // dinleyici söküp takmamak için.
+  const live = useRef({ selected, targetSet, sourceSet, onSelect, onMoveTo, disabled });
+  live.current = { selected, targetSet, sourceSet, onSelect, onMoveTo, disabled };
+
+  useEffect(() => {
+    const board = boardRef.current;
+    const ghost = ghostRef.current;
+    if (!board || !ghost) return;
+
+    const pointIndexAt = (clientX: number, clientY: number): number | null => {
+      const el = document
+        .elementFromPoint(clientX, clientY)
+        ?.closest<HTMLElement>("[data-point]");
+      if (!el || !board.contains(el)) return null;
+      return Number(el.dataset.point);
+    };
+
+    const moveGhost = (clientX: number, clientY: number) => {
+      const rect = board.getBoundingClientRect();
+      ghost.style.transform = `translate3d(${clientX - rect.left}px, ${clientY - rect.top}px, 0) translate(-50%, -50%)`;
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const { selected, targetSet, sourceSet, onMoveTo, onSelect, disabled } = live.current;
+      if (disabled || e.button > 0) return;
+
+      const index = pointIndexAt(e.clientX, e.clientY);
+      if (index === null) return;
+
+      // Seçili taş varsa ve buraya gidilebiliyorsa dokunuş hamledir.
+      if (selected !== null && targetSet.has(index)) {
+        onMoveTo(index);
+        return;
+      }
+      if (!sourceSet.has(index)) return;
+
+      // Kaynağa dokunuldu: hem seç hem olası sürüklemeyi başlat.
+      onSelect(index);
+      drag.current = {
+        from: index,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        player: state.turn,
+      };
+      board.setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d) return;
+
+      if (!d.moved) {
+        const dx = e.clientX - d.startX;
+        const dy = e.clientY - d.startY;
+        if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+        d.moved = true;
+        ghost.style.background =
+          d.player === 0
+            ? "radial-gradient(circle at 35% 30%, #FFFFFF 0%, #F1EDE3 45%, #DDD5C4 100%)"
+            : "radial-gradient(circle at 35% 30%, #575046 0%, #35302A 45%, #1D1915 100%)";
+        ghost.style.border = d.player === 0 ? "1px solid #A89F8F" : "1px solid rgba(0,0,0,0.75)";
+        ghost.style.opacity = "1";
+      }
+      moveGhost(e.clientX, e.clientY);
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      const d = drag.current;
+      drag.current = null;
+      ghost.style.opacity = "0";
+      if (!d) return;
+
+      // Sürüklenmediyse dokunmaydı: seçim zaten yapıldı, hedef bekleniyor.
+      if (!d.moved) return;
+
+      const { targetSet, onMoveTo, onSelect } = live.current;
+      const index = pointIndexAt(e.clientX, e.clientY);
+      if (index !== null && targetSet.has(index)) {
+        onMoveTo(index);
+      } else {
+        // Boşa bırakıldı: seçimi koru — dokunarak da bitirebilir.
+        onSelect(d.from);
+      }
+    };
+
+    board.addEventListener("pointerdown", onPointerDown);
+    board.addEventListener("pointermove", onPointerMove);
+    board.addEventListener("pointerup", onPointerUp);
+    board.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      board.removeEventListener("pointerdown", onPointerDown);
+      board.removeEventListener("pointermove", onPointerMove);
+      board.removeEventListener("pointerup", onPointerUp);
+      board.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [state.turn]);
 
   return (
     <div
-      className="relative w-full select-none overflow-hidden rounded-card border border-line shadow-lift"
+      ref={boardRef}
+      className="relative w-full select-none overflow-hidden rounded-card border-[3px] border-[#2b2620] shadow-lift [touch-action:none]"
       style={{
         aspectRatio: String(ASPECT),
-        background: "linear-gradient(160deg, #FBFAFF 0%, #F5F3FF 50%, #EFEBFE 100%)",
+        background: "linear-gradient(165deg, #FAF7F1 0%, #F1EDE4 60%, #EAE4D8 100%)",
       }}
     >
       {/* Orta bar */}
       <div
-        className="absolute top-0 h-full border-x border-line bg-white/70"
+        className="absolute top-0 h-full border-x border-[#2b2620]/25 bg-[#2b2620]/10"
         style={{ left: `${BAR_X}%`, width: `${BAR_W}%` }}
       />
       {/* Toplama tepsisi */}
       <div
-        className="absolute top-0 h-full border-l border-line bg-white/50"
+        className="absolute top-0 h-full border-l border-[#2b2620]/25 bg-[#2b2620]/5"
         style={{ left: `${TRAY_X}%`, width: `${TRAY_W}%` }}
       />
 
@@ -131,27 +220,22 @@ export function TavlaBoard({
           key={slot.index}
           slot={slot}
           count={state.points[slot.index]}
-          me={me}
           isSelected={selected === slot.index}
           isSource={sourceSet.has(slot.index)}
           isTarget={targetSet.has(slot.index)}
-          onClick={() => handleClick(slot.index)}
         />
       ))}
 
-      <BarStack
-        state={state}
-        me={me}
-        isSource={sourceSet.has(BAR)}
-        isSelected={selected === BAR}
-        onClick={() => handleClick(BAR)}
-      />
+      <BarStack state={state} me={me} isSource={sourceSet.has(BAR)} isSelected={selected === BAR} />
+      <OffTray state={state} isTarget={targetSet.has(OFF)} />
 
-      <OffTray
-        state={state}
-        me={me}
-        isTarget={targetSet.has(OFF)}
-        onClick={() => handleClick(OFF)}
+      {/* Sürükleme hayaleti — doğrudan DOM'dan sürülür, render tetiklemez.
+          Rengi sürükleme başlarken JS veriyor. */}
+      <div
+        ref={ghostRef}
+        aria-hidden
+        className="gpu pointer-events-none absolute left-0 top-0 z-30 rounded-full opacity-0 shadow-lift"
+        style={{ width: `${CHECKER_W_BOARD}%`, aspectRatio: "1" }}
       />
     </div>
   );
@@ -162,31 +246,33 @@ export function TavlaBoard({
 function PointColumn({
   slot,
   count,
-  me,
   isSelected,
   isSource,
   isTarget,
-  onClick,
 }: {
   slot: Slot;
   count: number;
-  me: Player;
   isSelected: boolean;
   isSource: boolean;
   isTarget: boolean;
-  onClick: () => void;
 }) {
   const owner: Player | null = count > 0 ? 0 : count < 0 ? 1 : null;
   const total = Math.abs(count);
   const dark = slot.index % 2 === 0;
+  const visible = Math.min(total, 5);
+
+  // Hedef halkası mevcut yığının ÜSTÜNE çizilir — "taşın nereye oturacağı"
+  // görünsün. Eskiden hep sütun ucundaydı ve dolu sütunlarda pulların
+  // altında kalıyordu.
+  const ringOffset = visible * CHECKER_H_LOCAL + 1;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!isSource && !isTarget}
+    <div
+      data-point={slot.index}
+      role="button"
       aria-label={`${slot.index + 1}. hane, ${total} pul`}
-      className="absolute disabled:cursor-default"
+      aria-disabled={!isSource && !isTarget}
+      className={cn("absolute", (isSource || isTarget) && "cursor-pointer")}
       style={{
         left: `${slot.x}%`,
         width: `${POINT_W}%`,
@@ -198,90 +284,104 @@ function PointColumn({
       {/* Üçgen */}
       <span
         aria-hidden
-        className="absolute inset-0 transition-opacity duration-200"
+        className="absolute inset-0"
         style={{
           clipPath: slot.top
             ? "polygon(50% 100%, 0 0, 100% 0)"
             : "polygon(50% 0, 0 100%, 100% 100%)",
           background: dark
-            ? "linear-gradient(to bottom, #DDD6FE, #C4B5FD)"
-            : "linear-gradient(to bottom, #FFFFFF, #EDE9FE)",
-          opacity: slot.top ? 1 : 0.92,
+            ? "linear-gradient(to bottom, #55493B, #6B5D4B)"
+            : "linear-gradient(to bottom, #D9D0C0, #CBC0AC)",
+          opacity: 0.95,
         }}
       />
 
-      {/* Geçerli hedef halkası */}
+      {/* Oynanabilir kaynak ipucu: sütun dibinde ince mor çizgi */}
+      {isSource && !isSelected ? (
+        <span
+          aria-hidden
+          className="absolute left-1/2 h-[3px] w-3/5 -translate-x-1/2 rounded-full bg-brand-500/80"
+          style={{ [slot.top ? "top" : "bottom"]: "1%" }}
+        />
+      ) : null}
+
+      {/* Hedef göstergesi: yığının üstünde yeşil hayalet halka */}
       {isTarget ? (
         <span
           aria-hidden
-          className="absolute left-1/2 -translate-x-1/2 rounded-full ring-2 ring-good/70"
+          className="absolute left-1/2 -translate-x-1/2 rounded-full border-2 border-dashed border-good/80 bg-good/15"
           style={{
-            width: `${CHECKER_W_LOCAL * 0.86}%`,
+            width: `${CHECKER_W_LOCAL * 0.9}%`,
             aspectRatio: "1",
-            [slot.top ? "top" : "bottom"]: "2%",
-            background: "rgb(22 163 74 / 0.14)",
+            [slot.top ? "top" : "bottom"]: `${Math.min(ringOffset, 100 - CHECKER_H_LOCAL)}%`,
           }}
         />
       ) : null}
 
-      {Array.from({ length: Math.min(total, 5) }, (_, i) => {
-        // 5'ten fazlaysa üst üste bindir; taşma olmasın.
-        const step =
-          total <= 5 ? CHECKER_H_LOCAL : (100 - CHECKER_H_LOCAL) / (total - 1);
-        const offset = i * step;
+      {Array.from({ length: visible }, (_, i) => {
+        const step = total <= 5 ? CHECKER_H_LOCAL : (100 - CHECKER_H_LOCAL) / (total - 1);
         return (
           <Checker
             key={i}
             player={owner!}
-            me={me}
-            highlighted={isSelected && i === Math.min(total, 5) - 1}
+            highlighted={isSelected && i === visible - 1}
             widthPct={CHECKER_W_LOCAL}
-            style={{
-              [slot.top ? "top" : "bottom"]: `${offset}%`,
-              left: "50%",
-            }}
+            style={{ [slot.top ? "top" : "bottom"]: `${i * step}%`, left: "50%" }}
           />
         );
       })}
 
       {total > 5 ? (
         <span
-          className="absolute left-1/2 -translate-x-1/2 rounded-full bg-ink px-1.5 text-[0.6rem] font-semibold leading-4 text-white"
+          className="absolute left-1/2 z-10 -translate-x-1/2 rounded-full bg-[#2b2620] px-1.5 text-[0.6rem] font-bold leading-4 text-white"
           style={{ [slot.top ? "top" : "bottom"]: `${4 * CHECKER_H_LOCAL + 2}%` }}
         >
           {total}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
+/**
+ * Pul: hafif üç boyut hissi veren radyal degrade + kenar çizgisi.
+ * Açık pul koyu kenarıyla açık zeminde, koyu pul açık iç halkasıyla koyu
+ * zeminde seçiliyor — "beyaz üstüne beyaz görünmüyor" derdi bu kenarlarla
+ * çözülüyor.
+ */
 function Checker({
   player,
-  me,
   highlighted,
   widthPct,
   style,
 }: {
   player: Player;
-  me: Player;
   highlighted?: boolean;
-  /** Kapsayıcının genişliğinin yüzdesi — hane ile bar farklı genişlikte. */
   widthPct: number;
   style: React.CSSProperties;
 }) {
-  const mine = player === me;
   return (
     <span
+      aria-hidden
       className={cn(
-        "absolute -translate-x-1/2 rounded-full border transition-[box-shadow,transform] duration-200",
-        player === 0
-          ? "border-brand-700 bg-gradient-to-br from-brand-400 to-brand-600"
-          : "border-line-strong bg-gradient-to-br from-white to-brand-100",
-        highlighted && "z-10 scale-110 shadow-[0_0_0_3px_rgb(139_92_246/0.55)]",
+        "absolute -translate-x-1/2 rounded-full transition-[box-shadow,transform] duration-200",
+        highlighted && "z-20 scale-110",
       )}
-      style={{ width: `${widthPct}%`, aspectRatio: "1", ...style }}
-      data-mine={mine}
+      style={{
+        width: `${widthPct}%`,
+        aspectRatio: "1",
+        background:
+          player === 0
+            ? "radial-gradient(circle at 35% 30%, #FFFFFF 0%, #F1EDE3 45%, #DDD5C4 100%)"
+            : "radial-gradient(circle at 35% 30%, #575046 0%, #35302A 45%, #1D1915 100%)",
+        border: player === 0 ? "1px solid #A89F8F" : "1px solid rgba(0,0,0,0.75)",
+        boxShadow: highlighted
+          ? "0 0 0 3px rgb(139 92 246 / 0.85), 0 4px 10px -2px rgb(0 0 0 / 0.4)"
+          : player === 0
+            ? "inset 0 0 0 3px rgb(255 255 255 / 0.8), inset 0 0 0 4px rgb(168 159 143 / 0.6), 0 2px 4px -1px rgb(0 0 0 / 0.35)"
+            : "inset 0 0 0 3px rgb(255 255 255 / 0.14), inset 0 0 0 4px rgb(0 0 0 / 0.4), 0 2px 4px -1px rgb(0 0 0 / 0.5)",
+        ...style,
+      }}
     />
   );
 }
@@ -291,23 +391,21 @@ function BarStack({
   me,
   isSource,
   isSelected,
-  onClick,
 }: {
   state: TavlaState;
   me: Player;
   isSource: boolean;
   isSelected: boolean;
-  onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!isSource}
+    <div
+      data-point={BAR}
+      role="button"
       aria-label={`Bar: beyaz ${state.bar[0]}, siyah ${state.bar[1]}`}
+      aria-disabled={!isSource}
       className={cn(
-        "absolute top-0 h-full transition-colors disabled:cursor-default",
-        isSource && "bg-brand-200/40",
+        "absolute top-0 h-full",
+        isSource && "cursor-pointer bg-brand-400/15",
       )}
       style={{ left: `${BAR_X}%`, width: `${BAR_W}%` }}
     >
@@ -315,7 +413,6 @@ function BarStack({
         <Checker
           key={`w${i}`}
           player={0}
-          me={me}
           highlighted={isSelected && me === 0 && i === Math.min(state.bar[0], 4) - 1}
           widthPct={CHECKER_W_BAR_LOCAL}
           style={{ bottom: `${28 + i * CHECKER_H_BOARD * 0.75}%`, left: "50%" }}
@@ -325,54 +422,42 @@ function BarStack({
         <Checker
           key={`b${i}`}
           player={1}
-          me={me}
           highlighted={isSelected && me === 1 && i === Math.min(state.bar[1], 4) - 1}
           widthPct={CHECKER_W_BAR_LOCAL}
           style={{ top: `${28 + i * CHECKER_H_BOARD * 0.75}%`, left: "50%" }}
         />
       ))}
-    </button>
+    </div>
   );
 }
 
-function OffTray({
-  state,
-  me,
-  isTarget,
-  onClick,
-}: {
-  state: TavlaState;
-  me: Player;
-  isTarget: boolean;
-  onClick: () => void;
-}) {
+function OffTray({ state, isTarget }: { state: TavlaState; isTarget: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!isTarget}
+    <div
+      data-point={OFF}
+      role="button"
       aria-label={`Toplananlar: beyaz ${state.off[0]}, siyah ${state.off[1]}`}
+      aria-disabled={!isTarget}
       className={cn(
-        "absolute top-0 h-full transition-colors disabled:cursor-default",
-        isTarget && "bg-good/12 ring-2 ring-inset ring-good/60",
+        "absolute top-0 h-full transition-colors",
+        isTarget && "cursor-pointer bg-good/15 ring-2 ring-inset ring-good/70",
       )}
       style={{ left: `${TRAY_X}%`, width: `${TRAY_W}%` }}
     >
-      {/* Toplanan pullar ince çubuklar olarak yığılır — 15 tane daire sığmaz. */}
       {Array.from({ length: state.off[1] }, (_, i) => (
         <span
           key={`b${i}`}
-          className="absolute left-1/2 h-[1.6%] w-[70%] -translate-x-1/2 rounded-full border border-line-strong bg-white"
+          className="absolute left-1/2 h-[1.6%] w-[70%] -translate-x-1/2 rounded-full border border-black/60 bg-[#35302A]"
           style={{ top: `${FRAME + i * 2.6}%` }}
         />
       ))}
       {Array.from({ length: state.off[0] }, (_, i) => (
         <span
           key={`w${i}`}
-          className="absolute left-1/2 h-[1.6%] w-[70%] -translate-x-1/2 rounded-full bg-brand-600"
+          className="absolute left-1/2 h-[1.6%] w-[70%] -translate-x-1/2 rounded-full border border-[#A89F8F] bg-[#F5F1E8]"
           style={{ bottom: `${FRAME + i * 2.6}%` }}
         />
       ))}
-    </button>
+    </div>
   );
 }

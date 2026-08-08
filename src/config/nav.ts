@@ -102,10 +102,17 @@ export const NAV: NavItem[] = [
     group: "biz",
   },
   {
-    href: "/galeri",
-    title: "Galeri",
-    blurb: "Bütün anılarımız bir arada.",
-    icon: "images",
+    href: "/ceyiz",
+    title: "Çeyiz",
+    blurb: "Kim ne alacak, ne kadara — toplamıyla birlikte.",
+    icon: "gem",
+    group: "liste",
+  },
+  {
+    href: "/sifreler",
+    title: "Şifreler",
+    blurb: "Netflix, Wi-Fi… unutmayalım diye.",
+    icon: "key",
     group: "biz",
   },
 ];

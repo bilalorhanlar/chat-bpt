@@ -73,13 +73,7 @@ export function BirthdayBanner({ people }: { people: Person[] }) {
   if (status.kind === "today") {
     return (
       <div className="mx-auto mb-12 w-full max-w-5xl px-6">
-        <div
-          className="relative overflow-hidden rounded-card border border-brand-200 px-6 py-7 text-center shadow-lift sm:px-10 sm:py-9"
-          style={{
-            background:
-              "linear-gradient(135deg, rgb(245 243 255) 0%, rgb(255 255 255) 45%, rgb(253 232 255) 100%)",
-          }}
-        >
+        <div className="relative overflow-hidden rounded-card border border-ink/15 bg-white px-6 py-7 text-center shadow-lift sm:px-10 sm:py-9">
           <Cake className="mx-auto mb-3 size-7 text-accent-400" strokeWidth={1.5} aria-hidden />
           <h2 className="text-[1.6rem] leading-tight sm:text-[2.1rem]">
             İyi ki doğdun {status.name}

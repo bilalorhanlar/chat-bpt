@@ -3,10 +3,11 @@ import {
   Clapperboard,
   Crown,
   Dices,
+  Gem,
   Grid2x2,
   Heart,
   Home,
-  Images,
+  KeyRound,
   Mail,
   MapPin,
   MessageCircle,
@@ -33,7 +34,8 @@ const ICONS: Record<string, LucideIcon> = {
   timer: Timer,
   "message-circle": MessageCircle,
   mail: Mail,
-  images: Images,
+  gem: Gem,
+  key: KeyRound,
   heart: Heart,
 };
 

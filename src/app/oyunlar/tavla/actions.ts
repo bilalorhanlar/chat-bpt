@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
   RESULT_POINTS,
   applyMove,
-  canRoll,
   endTurn,
   initialState,
   legalMoves,
@@ -73,7 +72,8 @@ export async function createTavlaMatch(mode: "ONLINE" | "LOCAL"): Promise<string
   const starter: Player = opening[0] > opening[1] ? 0 : 1;
 
   const now = Date.now();
-  const state = initialState(starter, now);
+  // Zar otomatik: maç açılırken ilk tur zarı da atılır, oyuncu düğmeye basmaz.
+  const state = roll(initialState(starter, now), rollDice(), now);
 
   const id = await createMatch({
     game: "TAVLA",
@@ -85,17 +85,6 @@ export async function createTavlaMatch(mode: "ONLINE" | "LOCAL"): Promise<string
 
   revalidatePath("/oyunlar/tavla");
   return id;
-}
-
-export async function rollTavlaDice(matchId: string): Promise<ActionResult> {
-  return withMatch(matchId, async ({ state }) => {
-    if (!canRoll(state)) return fail("Bu turda zarını attın — sırayı devret.");
-
-    const next = roll(state, rollDice(), Date.now());
-    await saveState(matchId, next);
-    emitMatchState(matchId, next);
-    return { ok: true, state: next };
-  });
 }
 
 const MoveInput = z.object({
@@ -156,7 +145,10 @@ export async function endTavlaTurn(matchId: string): Promise<ActionResult> {
   return withMatch(matchId, async ({ state }) => {
     if (legalMoves(state).length > 0) return fail("Oynanacak hamlen var.");
 
-    const next = endTurn(state, Date.now());
+    const now = Date.now();
+    // Sıra devredilir devredilmez yeni oyuncunun zarı otomatik atılır —
+    // "zar at" düğmesi yok. endTurn `rolled`ı sıfırladığı için canRoll açılır.
+    const next = roll(endTurn(state, now), rollDice(), now);
     await saveState(matchId, next);
     emitMatchState(matchId, next);
     return { ok: true, state: next };

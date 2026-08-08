@@ -56,7 +56,11 @@ export function SatrancBoard({
 
   return (
     <div className="relative w-full select-none overflow-hidden rounded-card border border-line shadow-lift">
-      <div className="grid aspect-square grid-cols-8">
+      {/* Kare garantisi hücrede: kapsayıcıya aspect-square verip yüksekliği
+          8'e bölmek, tam sayıya yuvarlanmayan pikselleri satırlara dağıtıyor ve
+          bazı kareler dikdörtgen oluyordu. Her hücre kendi oranını taşıyınca
+          hepsi birebir kare. */}
+      <div className="grid grid-cols-8">
         {rows.map((row, rowIndex) => {
           const cells = flipped ? [...row].reverse() : row;
           return cells.map((cell, colIndex) => {
@@ -76,11 +80,10 @@ export function SatrancBoard({
                 onClick={() => !disabled && onSquare(square)}
                 aria-label={`${square}${cell ? `, ${cell.color === "w" ? "beyaz" : "siyah"}` : " boş"}`}
                 className={cn(
-                  "relative flex items-center justify-center transition-colors duration-150",
-                  light ? "bg-[#F3F0FE]" : "bg-[#C3B4EE]",
-                  // Son hamle vurgusu: lichess sarısı mor tahtada hardal gibi duruyor,
-                  // paletin gül aksanı hem ayırt ediliyor hem uyuyor.
-                  isLast && (light ? "bg-[#FBE1F4]" : "bg-[#E7A9D6]"),
+                  "relative flex aspect-square items-center justify-center transition-colors duration-150",
+                  light ? "bg-[#F5F3EE]" : "bg-[#B8AE9C]",
+                  // Son hamle vurgusu: bej tahtaya uyan sıcak sarı.
+                  isLast && (light ? "bg-[#F1E3AE]" : "bg-[#CDBB78]"),
                   selected === square && "bg-brand-400/85",
                   checkSquare === square &&
                     "bg-[radial-gradient(circle,rgb(225_29_72/0.55)_0%,rgb(225_29_72/0.15)_60%,transparent_75%)]",
@@ -91,7 +94,7 @@ export function SatrancBoard({
                   <span
                     className={cn(
                       "pointer-events-none absolute left-[3px] top-[1px] text-[0.5rem] font-semibold sm:text-[0.6rem]",
-                      light ? "text-[#9A8BD0]" : "text-[#F3F0FE]",
+                      light ? "text-[#A69B87]" : "text-[#F5F3EE]",
                     )}
                   >
                     {rank}
@@ -101,7 +104,7 @@ export function SatrancBoard({
                   <span
                     className={cn(
                       "pointer-events-none absolute bottom-[1px] right-[3px] text-[0.5rem] font-semibold sm:text-[0.6rem]",
-                      light ? "text-[#9A8BD0]" : "text-[#F3F0FE]",
+                      light ? "text-[#A69B87]" : "text-[#F5F3EE]",
                     )}
                   >
                     {file}

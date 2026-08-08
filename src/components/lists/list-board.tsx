@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Check, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ExternalLink, MapPin, Plus, Trash2 } from "lucide-react";
 
 import {
   addListItem,
@@ -170,6 +170,7 @@ function AddForm({
   onError: (message: string | null) => void;
 }) {
   const [title, setTitle] = useState("");
+  const [link, setLink] = useState("");
   const [kind, setKind] = useState(config.kinds?.[0]?.value ?? "");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -180,7 +181,12 @@ function AddForm({
     if (!value || busy) return;
 
     setBusy(true);
-    const result = await addListItem({ slug, title: value, kind: kind || undefined });
+    const result = await addListItem({
+      slug,
+      title: value,
+      kind: kind || undefined,
+      link: link.trim() || undefined,
+    });
     setBusy(false);
 
     if (!result.ok) {
@@ -190,6 +196,7 @@ function AddForm({
     onError(null);
     onAdded(result.item);
     setTitle("");
+    setLink("");
     inputRef.current?.focus();
   }
 
@@ -209,6 +216,17 @@ function AddForm({
           <span className="hidden sm:inline">Ekle</span>
         </Button>
       </div>
+
+      {config.link ? (
+        <input
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder={config.link.placeholder}
+          inputMode="url"
+          aria-label={config.link.label}
+          className="mt-2 h-11 w-full rounded-btn border border-line bg-surface px-4 text-[0.9rem] outline-none transition-colors placeholder:text-ink-faint focus:border-ink"
+        />
+      ) : null}
 
       {config.kinds ? (
         <div className="mt-2.5 flex gap-2">
@@ -307,6 +325,24 @@ function Row({
           </span>
         ) : null}
       </div>
+
+      {item.link ? (
+        <a
+          href={item.link}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Bağlantıyı aç"
+          title={item.link}
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-brand-600 transition-colors hover:bg-brand-50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {item.link.includes("google") || item.link.includes("maps") ? (
+            <MapPin className="size-4" strokeWidth={1.8} aria-hidden />
+          ) : (
+            <ExternalLink className="size-4" strokeWidth={1.8} aria-hidden />
+          )}
+        </a>
+      ) : null}
 
       {person ? (
         <span

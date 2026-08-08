@@ -182,7 +182,7 @@ export function SatrancGame({
         active={toMove === topSeat && state.winner === null}
         online
         showOnline={false}
-        checkerColor={topSeat === 0 ? "light" : "brand"}
+        checkerColor={topSeat === 0 ? "light" : "dark"}
         clock={clockMs[topSeat]}
         captured={<CapturedRow pieces={captured[topSeat === 0 ? "b" : "w"]} color={topSeat === 0 ? "b" : "w"} />}
       />
@@ -205,7 +205,7 @@ export function SatrancGame({
         active={toMove === perspective && state.winner === null}
         online
         showOnline={false}
-        checkerColor={perspective === 0 ? "light" : "brand"}
+        checkerColor={perspective === 0 ? "light" : "dark"}
         clock={clockMs[perspective]}
         captured={<CapturedRow pieces={captured[perspective === 0 ? "b" : "w"]} color={perspective === 0 ? "b" : "w"} />}
       />

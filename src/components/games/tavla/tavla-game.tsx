@@ -8,9 +8,9 @@ import {
   endTavlaTurn,
   moveTavlaChecker,
   resignTavla,
-  rollTavlaDice,
   undoTavlaTurn,
 } from "@/app/oyunlar/tavla/actions";
+import { RotateHint } from "@/components/games/rotate-hint";
 import { Dice3D } from "@/components/games/dice-3d";
 import { TavlaBoard } from "@/components/games/tavla/board";
 import { GameOverDialog } from "@/components/games/game-over-dialog";
@@ -65,11 +65,7 @@ export function TavlaGame({
   const { online, connected } = useMatchChannel<TavlaState>(
     mode === "ONLINE" ? matchId : "",
     useCallback((next: TavlaState) => {
-      setState((current) => {
-        // Yeni bir atış geldiyse zar animasyonunu tetikle.
-        if (next.rolled && next.rolled !== current.rolled) setRollKey((k) => k + 1);
-        return next;
-      });
+      setState(next);
       setSelected(null);
     }, []),
   );
@@ -111,11 +107,22 @@ export function TavlaGame({
     setSelected(null);
   }
 
-  async function handleRoll() {
-    setRollKey((k) => k + 1);
-    playSound("zar");
-    await run(() => rollTavlaDice(matchId));
-  }
+  // Zar sunucuda otomatik atılıyor; burada yalnızca animasyon ve ses
+  // tetikleniyor. Her tur (`ply`) tek atış demek. İlk karede ses çalınmaz —
+  // sayfa yenilendiğinde "yeni atış olmuş" gibi davranmasın.
+  const seenPly = useRef<number | null>(null);
+  useEffect(() => {
+    if (!state.rolled) return;
+    if (seenPly.current === null) {
+      seenPly.current = state.ply;
+      return;
+    }
+    if (seenPly.current !== state.ply) {
+      seenPly.current = state.ply;
+      setRollKey((k) => k + 1);
+      playSound("zar");
+    }
+  }, [state.ply, state.rolled]);
 
   async function handleMoveTo(to: number) {
     if (selected === null) return;
@@ -145,22 +152,22 @@ export function TavlaGame({
   // Zar atılmış ve oynanacak hamle kalmamışsa sıra devredilmeli. İki hâli var:
   // zarların hepsi oynandı (dice boş) ya da hiç oynanabilir hamle çıkmadı.
   const mustEndTurn = myTurn && state.rolled !== null && moves.length === 0 && state.winner === null;
-  const canRoll = myTurn && state.rolled === null && state.winner === null;
   const outOfMoves = mustEndTurn && state.dice.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl short-landscape:grid short-landscape:max-w-none short-landscape:grid-cols-[minmax(0,1fr)_15.5rem] short-landscape:items-start short-landscape:gap-3">
+      <RotateHint />
       <PlayerBar
         person={people[seats[topSeat]]}
         pip={pipCount(state, topSeat)}
         active={state.turn === topSeat && state.winner === null}
         online={mode === "ONLINE" ? (online[seats[topSeat]] ?? false) : true}
         showOnline={mode === "ONLINE" && seats[topSeat] !== me}
-        checkerColor={topSeat === 0 ? "brand" : "light"}
+        checkerColor={topSeat === 0 ? "light" : "dark"}
         off={state.off[topSeat]}
       />
 
-      <div className="my-3">
+      <div className="my-3 short-landscape:col-start-1 short-landscape:row-span-4 short-landscape:row-start-1 short-landscape:my-0 short-landscape:justify-self-center short-landscape:[width:min(100%,calc((100svh-6.5rem)*1.45))]">
         <TavlaBoard
           state={state}
           me={perspective}
@@ -179,12 +186,12 @@ export function TavlaGame({
         active={state.turn === perspective && state.winner === null}
         online
         showOnline={false}
-        checkerColor={perspective === 0 ? "brand" : "light"}
+        checkerColor={perspective === 0 ? "light" : "dark"}
         off={state.off[perspective]}
       />
 
       {/* --- zar ve eylemler --- */}
-      <div className="mt-4 rounded-card border border-line bg-surface/85 p-4 shadow-soft backdrop-blur-sm">
+      <div className="mt-4 rounded-card border border-line bg-surface p-4 shadow-soft short-landscape:mt-0">
         <div className="flex items-center gap-4">
           <div className="min-w-0 flex-1">
             {state.winner !== null ? (
@@ -207,9 +214,7 @@ export function TavlaGame({
                 </p>
               </>
             ) : (
-              <p className="text-[0.9rem] text-ink-soft">
-                {myTurn ? "Zar atma sırası sende." : `${people[seats[state.turn]].name} zar atacak.`}
-              </p>
+              <p className="text-[0.9rem] text-ink-soft">Zar atılıyor…</p>
             )}
           </div>
 
@@ -225,12 +230,6 @@ export function TavlaGame({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
-          {canRoll ? (
-            <Button size="lg" onClick={handleRoll} disabled={busy}>
-              Zar at
-            </Button>
-          ) : null}
-
           {mustEndTurn ? (
             <Button size="lg" onClick={() => run(() => endTavlaTurn(matchId))} disabled={busy}>
               <SkipForward className="size-4" strokeWidth={2} aria-hidden />

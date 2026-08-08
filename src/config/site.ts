@@ -27,8 +27,7 @@ export const PEOPLE: Record<
   },
   partner: {
     key: "partner",
-    // TODO(bilal): gerçek ismi yaz — Ayarlar ekranından da değiştirilebilir.
-    name: "Aşkım",
+    name: "Sümeyye",
     birthday: "2002-02-17",
     accent: "#E879F9",
   },

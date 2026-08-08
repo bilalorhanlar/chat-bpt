@@ -20,7 +20,7 @@ export function PlayerBar({
   online: boolean;
   showOnline: boolean;
   /** Taş rengi göstergesi. */
-  checkerColor: "brand" | "light";
+  checkerColor: "light" | "dark";
   /** Tavla: kalan pip. */
   pip?: number;
   /** Tavla: toplanan pul. */
@@ -34,18 +34,16 @@ export function PlayerBar({
     <div
       className={cn(
         "flex items-center gap-3 rounded-2xl border px-4 py-2.5 transition-colors duration-300",
-        active
-          ? "border-brand-300 bg-brand-50/80 shadow-soft"
-          : "border-line bg-surface/60",
+        active ? "border-ink bg-white shadow-soft" : "border-line bg-white/70",
       )}
     >
       <span
         aria-hidden
         className={cn(
           "size-6 shrink-0 rounded-full border",
-          checkerColor === "brand"
-            ? "border-brand-700 bg-gradient-to-br from-brand-400 to-brand-600"
-            : "border-line-strong bg-gradient-to-br from-white to-brand-100",
+          checkerColor === "dark"
+            ? "border-black/70 bg-gradient-to-br from-[#4d453d] to-[#1d1915]"
+            : "border-[#a89f8f] bg-gradient-to-br from-white to-[#ddd5c4]",
         )}
       />
 
@@ -85,7 +83,7 @@ function Clock({ ms, active }: { ms: number; active: boolean }) {
     <span
       className={cn(
         "shrink-0 rounded-xl px-3 py-1.5 font-display text-[1.15rem] tabular-nums transition-colors",
-        low ? "bg-bad/12 text-bad" : active ? "bg-brand-600 text-white" : "bg-brand-50 text-ink-soft",
+        low ? "bg-bad/12 text-bad" : active ? "bg-ink text-white" : "bg-[#f0f0f0] text-ink-soft",
       )}
     >
       {minutes}:{String(seconds).padStart(2, "0")}

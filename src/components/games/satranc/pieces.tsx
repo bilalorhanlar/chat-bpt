@@ -94,14 +94,14 @@ export function ChessPiece({
       aria-hidden
       style={
         {
-          "--piece-line": white ? "#4C1D95" : "#F5F3FF",
-          "--piece-eye": white ? "#4C1D95" : "#EDE9FE",
+          "--piece-line": white ? "#1C1917" : "#F5F5F4",
+          "--piece-eye": white ? "#1C1917" : "#E7E5E4",
         } as React.CSSProperties
       }
     >
       <g
-        fill={white ? "#FFFFFF" : "#3B2A63"}
-        stroke={white ? "#5B21B6" : "#1A1523"}
+        fill={white ? "#FFFFFF" : "#2A2622"}
+        stroke={white ? "#44403C" : "#0F0D0B"}
         strokeWidth="1.5"
         strokeLinejoin="round"
       >

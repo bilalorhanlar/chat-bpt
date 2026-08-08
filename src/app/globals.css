@@ -2,17 +2,18 @@
 
 /* ---------------------------------------------------------------------------
    Tasarım token'ları
-   Beyaz zemin, mor birincil, yumuşak gül ikincil aksan.
-   Tek kaynak burasıdır; bileşenler ham renk yazmaz.
+   Beyaz zemin, siyah metin, Helvetica. Modern ve minimal; mor yalnızca küçük
+   detaylarda (ikonlar, etiketler, odak halkaları) kullanılıyor — yüzeylerde
+   değil. Büyük mor alan görürsen yanlış yoldasın.
 --------------------------------------------------------------------------- */
 @theme {
-  --color-canvas: #fbfaff;
+  --color-canvas: #ffffff;
   --color-surface: #ffffff;
-  --color-line: #ece8f8;
-  --color-line-strong: #ded6f7;
-  --color-ink: #1a1523;
-  --color-ink-soft: #6b6478;
-  --color-ink-faint: #9a94a8;
+  --color-line: #e8e8e8;
+  --color-line-strong: #d4d4d4;
+  --color-ink: #0a0a0a;
+  --color-ink-soft: #555555;
+  --color-ink-faint: #9a9a9a;
 
   --color-brand-50: #f5f3ff;
   --color-brand-100: #ede9fe;
@@ -33,19 +34,24 @@
   --color-good: #16a34a;
   --color-bad: #e11d48;
 
-  --font-display: var(--font-fraunces), Georgia, serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display:
+    "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
 
-  --radius-card: 1.5rem;
-  --radius-btn: 0.875rem;
+  --radius-card: 1.25rem;
+  --radius-btn: 0.75rem;
 
-  --shadow-soft: 0 1px 2px rgb(76 29 149 / 0.05), 0 10px 30px -18px rgb(76 29 149 / 0.18);
-  --shadow-lift: 0 2px 4px rgb(76 29 149 / 0.06), 0 20px 48px -22px rgb(76 29 149 / 0.28);
-  --shadow-glow: 0 10px 40px -12px rgb(139 92 246 / 0.45);
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -16px rgb(0 0 0 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.05), 0 18px 44px -20px rgb(0 0 0 / 0.2);
+  --shadow-glow: 0 8px 32px -10px rgb(124 58 237 / 0.35);
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
 }
+
+/* Yatay tutulan telefon: tavla düzeni bu kırılımda iki sütuna geçiyor. */
+@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 540px));
 
 /* ---------------------------------------------------------------------------
    Temel
@@ -60,25 +66,24 @@
     background-color: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    /* Yatay kaymayı kökten engelle: aurora blob'ları taşabilir. */
+    /* Yatay kaymayı kökten engelle. */
     overflow-x: hidden;
   }
 
+  /* Helvetica başlıkları: kalın, sıkı ve büyük — tipografinin kendisi süs. */
   h1,
   h2,
   h3 {
     font-family: var(--font-display);
-    font-weight: 500;
-    letter-spacing: -0.015em;
-    font-optical-sizing: auto;
+    font-weight: 700;
+    letter-spacing: -0.03em;
   }
 
   ::selection {
-    background-color: var(--color-brand-200);
-    color: var(--color-brand-900);
+    background-color: var(--color-ink);
+    color: #ffffff;
   }
 
   :focus-visible {
@@ -94,11 +99,10 @@
     font-size: max(16px, 1em);
   }
 
-  /* Kaydırma çubuğu — masaüstünde temaya uysun. */
   @media (pointer: fine) {
     * {
       scrollbar-width: thin;
-      scrollbar-color: var(--color-brand-200) transparent;
+      scrollbar-color: var(--color-line-strong) transparent;
     }
   }
 }
@@ -124,41 +128,10 @@
 
 /* ---------------------------------------------------------------------------
    Animasyonlar
-   Kural: yalnızca transform ve opacity. blur() değeri asla animasyonlanmaz —
-   her karede yeniden hesaplanır ve mobilde kare düşürür.
+   Kural: yalnızca transform ve opacity animasyonlanır.
 --------------------------------------------------------------------------- */
 
-@keyframes aurora-a {
-  0%,
-  100% {
-    transform: translate3d(-12%, -6%, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(8%, 10%, 0) scale(1.18);
-  }
-}
-
-@keyframes aurora-b {
-  0%,
-  100% {
-    transform: translate3d(10%, 8%, 0) scale(1.1);
-  }
-  50% {
-    transform: translate3d(-8%, -10%, 0) scale(0.92);
-  }
-}
-
-@keyframes aurora-c {
-  0%,
-  100% {
-    transform: translate3d(0, 12%, 0) scale(0.95);
-  }
-  50% {
-    transform: translate3d(6%, -8%, 0) scale(1.15);
-  }
-}
-
-/** Ana sayfa iz efekti: içteki <img> bunu oynatır, konum dıştaki div'de. */
+/** Ana sayfa iz efekti karesi. */
 @keyframes trail-pop {
   0% {
     opacity: 0;
@@ -223,22 +196,54 @@
   }
 }
 
-@keyframes shimmer {
-  from {
-    transform: translateX(-120%);
-  }
-  to {
-    transform: translateX(220%);
-  }
+/* ---------------------------------------------------------------------------
+   Kaydırma akışı
+   Bölümler görünür olduklarında .in-view alır (ScrollReveal bileşeni verir);
+   çocuklar sırayla yükselir. Yalnızca transform/opacity — düzen oynamaz.
+--------------------------------------------------------------------------- */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 28px, 0);
+  transition:
+    opacity 0.7s var(--ease-out-soft),
+    transform 0.7s var(--ease-out-soft);
+}
+
+.in-view .reveal,
+.in-view.reveal {
+  opacity: 1;
+  transform: none;
+}
+
+/* Kademeli gecikme: bir bölümde en fazla 6 sıralı öğe yeter. */
+.in-view .reveal:nth-child(2) {
+  transition-delay: 0.08s;
+}
+.in-view .reveal:nth-child(3) {
+  transition-delay: 0.16s;
+}
+.in-view .reveal:nth-child(4) {
+  transition-delay: 0.24s;
+}
+.in-view .reveal:nth-child(5) {
+  transition-delay: 0.32s;
+}
+.in-view .reveal:nth-child(6) {
+  transition-delay: 0.4s;
 }
 
 /* ---------------------------------------------------------------------------
    Hareket azaltma
-   Sistem ayarı "azalt" ise dekoratif hareketi tamamen kapat.
 --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 
   *,

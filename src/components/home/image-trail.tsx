@@ -53,7 +53,14 @@ const KEYFRAMES: Keyframe[] = [
   { opacity: 0, transform: "scale(0.93)" },
 ];
 
-export function ImageTrail({ children }: { children: ReactNode }) {
+export function ImageTrail({
+  children,
+  background,
+}: {
+  children: ReactNode;
+  /** Bölümün en arkasına çizilecek katman (ör. tam ekran fotoğraf). */
+  background?: ReactNode;
+}) {
   const sectionRef = useRef<HTMLElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
   const hintRef = useRef<HTMLDivElement>(null);
@@ -82,7 +89,7 @@ export function ImageTrail({ children }: { children: ReactNode }) {
         "block w-[136px] sm:w-[188px] aspect-[4/5] object-cover rounded-[18px] " +
         "border border-white/70 will-change-[transform,opacity]";
       img.style.opacity = "0";
-      img.style.boxShadow = "0 18px 44px -22px rgb(76 29 149 / 0.45)";
+      img.style.boxShadow = "0 18px 44px -22px rgb(0 0 0 / 0.38)";
       img.decoding = "async";
       img.draggable = false;
       img.alt = "";
@@ -217,27 +224,19 @@ export function ImageTrail({ children }: { children: ReactNode }) {
   return (
     <section
       ref={sectionRef}
-      className="relative isolate flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-6"
+      className="relative isolate flex min-h-[100svh] flex-col overflow-hidden px-6 sm:px-10"
     >
+      {background}
       <div ref={layerRef} aria-hidden className="pointer-events-none absolute inset-0 z-0" />
       <StaticCollage />
-      <div className="relative z-10 flex flex-col items-center">
-        {/* Başlığın fotoğrafların üstünde okunur kalması için yumuşak beyaz hale.
-            Statik; hiç animasyonu yok. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[30rem] w-[48rem] max-w-[150vw] -translate-x-1/2 -translate-y-1/2"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, rgb(255 255 255 / 0.88) 0%, rgb(255 255 255 / 0.66) 40%, rgb(255 255 255 / 0) 72%)",
-          }}
-        />
-        {children}
+      {/* İçerik alta oturur: görselin ortasındaki tipografiyle yarışmasın. */}
+      <div className="pointer-events-none relative z-10 flex min-h-[100svh] w-full flex-col justify-end pb-16 pt-24 sm:pb-14">
+        <div className="pointer-events-auto">{children}</div>
       </div>
       <div
         ref={hintRef}
         aria-hidden
-        className="pointer-events-none absolute bottom-24 left-1/2 z-10 -translate-x-1/2 text-[0.8rem] tracking-wide text-ink-faint transition-opacity duration-700 sm:bottom-16"
+        className="pointer-events-none absolute bottom-24 left-1/2 z-10 -translate-x-1/2 text-[0.8rem] font-medium uppercase tracking-[0.2em] text-ink/50 transition-opacity duration-700 sm:bottom-16"
       >
         <span className="hidden sm:inline">fareni gezdir</span>
         <span className="sm:hidden">parmağını kaydır</span>

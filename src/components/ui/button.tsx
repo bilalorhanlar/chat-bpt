@@ -11,14 +11,12 @@ const BASE =
   "transition-[transform,box-shadow,background-color,color] duration-200 ease-[var(--ease-out-soft)] " +
   "active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45";
 
+// Birincil düğme siyah: tasarım siyah/beyaz minimal, mor yalnızca detayda.
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    "bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-[0_1px_2px_rgb(76_29_149/0.25)] " +
-    "hover:shadow-glow hover:from-brand-400 hover:to-brand-500",
+  primary: "bg-ink text-white hover:bg-black hover:shadow-lift",
   soft: "bg-brand-50 text-brand-700 hover:bg-brand-100",
-  outline:
-    "border border-line-strong bg-surface text-ink hover:border-brand-300 hover:bg-brand-50/60",
-  ghost: "text-ink-soft hover:bg-brand-50 hover:text-brand-700",
+  outline: "border border-line-strong bg-surface text-ink hover:border-ink",
+  ghost: "text-ink-soft hover:bg-[#f4f4f4] hover:text-ink",
   danger: "bg-bad/10 text-bad hover:bg-bad/15",
 };
 

@@ -211,3 +211,35 @@ model Setting {
   key   String @id
   value Json
 }
+
+model CeyizItem {
+  id       String  @id @default(cuid())
+  /// Serbest metin kategori: "Mutfak", "Banyo"… Liste Setting("ceyizKategoriler")'de.
+  category String
+  title    String
+  /// Yaklaşık fiyat (TL). Bilinmiyorsa null.
+  price    Int?
+  /// Kim alacak: "bilal" | "partner". Henüz belli değilse null.
+  buyerId  String?
+  /// Alındı mı.
+  done     Boolean @default(false)
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+}
+
+model Credential {
+  id       String  @id @default(cuid())
+  title    String
+  username String
+  /// AES-256-GCM ile şifreli: `iv.tag.veri` (base64url). Anahtar AUTH_SECRET'tan
+  /// türetiliyor — veritabanı tek başına sızsa da parolalar okunamaz.
+  secret   String
+  note     String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
