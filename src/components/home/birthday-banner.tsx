@@ -3,56 +3,51 @@
 import { useEffect, useState } from "react";
 import { Cake, Gift } from "lucide-react";
 
-import { PEOPLE, PERSON_KEYS } from "@/config/site";
 import { ageOn, daysBetween, isTodayAnniversary, nextAnniversary, trDate } from "@/lib/utils";
 
+type Person = { key: string; name: string; birthday: string; accent: string };
+
 type Status =
-  | { kind: "today"; name: string; age: number; accent: string }
-  | { kind: "soon"; name: string; days: number; date: string; accent: string }
+  | { kind: "today"; name: string; age: number }
+  | { kind: "soon"; name: string; days: number; date: string }
   | { kind: "none" };
 
-/**
- * Doğum günü şeridi.
- *
- * Bugün biriyseniz kutlama, 30 güne kadar yaklaştıysa hatırlatma çıkarır.
- * Tarih karşılaştırması yalnızca tarayıcıda yapılıyor — sunucu UTC'de
- * çalıştığında gece yarısı ile 03:00 arasında bir gün şaşabiliyor.
- */
-function compute(now: Date): Status {
-  for (const key of PERSON_KEYS) {
-    const p = PEOPLE[key];
-    if (isTodayAnniversary(p.birthday, now)) {
-      return { kind: "today", name: p.name, age: ageOn(p.birthday, now), accent: p.accent };
+/** Bugün doğum günüyse kutlama, 30 güne kadar yaklaştıysa hatırlatma. */
+function compute(people: Person[], now: Date): Status {
+  for (const person of people) {
+    if (isTodayAnniversary(person.birthday, now)) {
+      return { kind: "today", name: person.name, age: ageOn(person.birthday, now) };
     }
   }
 
   let best: Status = { kind: "none" };
   let bestDays = Infinity;
-  for (const key of PERSON_KEYS) {
-    const p = PEOPLE[key];
-    const days = daysBetween(now, nextAnniversary(p.birthday, now));
+  for (const person of people) {
+    const days = daysBetween(now, nextAnniversary(person.birthday, now));
     if (days > 0 && days <= 30 && days < bestDays) {
       bestDays = days;
-      best = { kind: "soon", name: p.name, days, date: p.birthday, accent: p.accent };
+      best = { kind: "soon", name: person.name, days, date: person.birthday };
     }
   }
   return best;
 }
 
-export function BirthdayBanner() {
+export function BirthdayBanner({ people }: { people: Person[] }) {
   const [status, setStatus] = useState<Status>({ kind: "none" });
 
+  // Tarih karşılaştırması yalnızca tarayıcıda: sunucu ile istemcinin günü
+  // ayrıldığında hidrasyon uyuşmazlığı çıkardı.
   useEffect(() => {
-    setStatus(compute(new Date()));
-  }, []);
+    setStatus(compute(people, new Date()));
+  }, [people]);
 
   useEffect(() => {
     if (status.kind !== "today") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     let cancelled = false;
-    // Konfeti yalnızca doğum gününde gerekiyor; paketi o an indiriyoruz ki
-    // diğer 364 gün boyunca kimse bu kodu yüklemesin.
+    // Konfeti paketi yalnızca doğum gününde indiriliyor; diğer 364 gün
+    // kimse bu kodu yüklemiyor.
     void import("canvas-confetti").then(({ default: confetti }) => {
       if (cancelled) return;
       const shoot = (x: number) =>

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
-import { PEOPLE } from "@/config/site";
 import { SESSION_COOKIE, readSessionToken, type Session } from "@/lib/auth";
+import { getPeople, partnerOf } from "@/lib/people";
 
 /** Sunucu bileşenlerinde ve route handler'larda oturumu okur. */
 export async function getSession(): Promise<Session | null> {
@@ -24,11 +24,12 @@ export async function requireSession(): Promise<Session> {
 
 /** Oturumdaki kişinin profil bilgisi (isim, doğum günü, renk). */
 export async function currentPerson() {
-  const session = await requireSession();
-  return PEOPLE[session.user];
+  const [session, people] = await Promise.all([requireSession(), getPeople()]);
+  return people[session.user];
 }
 
 /** Karşı taraf — "rakip" ve "sana yazdı" gibi yerler için. */
-export function otherPerson(user: Session["user"]) {
-  return PEOPLE[user === "bilal" ? "partner" : "bilal"];
+export async function otherPerson(user: Session["user"]) {
+  const people = await getPeople();
+  return people[partnerOf(user)];
 }

@@ -4,9 +4,13 @@ import { BirthdayBanner } from "@/components/home/birthday-banner";
 import { ImageTrail } from "@/components/home/image-trail";
 import { NavGrid } from "@/components/home/nav-grid";
 import { TogetherCounter } from "@/components/home/together-counter";
-import { PEOPLE } from "@/config/site";
+import { getPeople, getTogetherSince } from "@/lib/people";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const [people, togetherSince] = await Promise.all([getPeople(), getTogetherSince()]);
+
   return (
     <main className="flex flex-1 flex-col">
       <ImageTrail>
@@ -23,14 +27,14 @@ export default function HomePage() {
         </span>
 
         <h1 className="text-balance-tr text-center font-display text-[clamp(2.7rem,11vw,5.6rem)] leading-[0.94] tracking-[-0.03em]">
-          <span>{PEOPLE.bilal.name}</span>
+          <span>{people.bilal.name}</span>
           <span className="mx-2 bg-gradient-to-br from-brand-500 to-accent-400 bg-clip-text text-transparent sm:mx-3">
             &amp;
           </span>
-          <span>{PEOPLE.partner.name}</span>
+          <span>{people.partner.name}</span>
         </h1>
 
-        <TogetherCounter />
+        <TogetherCounter since={togetherSince} />
 
         <ChevronDown
           aria-hidden
@@ -39,7 +43,7 @@ export default function HomePage() {
         />
       </ImageTrail>
 
-      <BirthdayBanner />
+      <BirthdayBanner people={Object.values(people)} />
       <NavGrid />
     </main>
   );
