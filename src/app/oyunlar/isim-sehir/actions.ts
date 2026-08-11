@@ -18,6 +18,7 @@ import {
   type Category,
   type IsimSehirState,
 } from "@/games/isim-sehir/types";
+import { sessionUser } from "@/lib/auth";
 import {
   canAct,
   createMatch,
@@ -31,6 +32,27 @@ import { requireSession } from "@/lib/session";
 
 type ActionResult = { ok: true; state: IsimSehirState } | { ok: false; error: string };
 const fail = (error: string): ActionResult => ({ ok: false, error });
+
+/**
+ * Bu oturum hangi koltuk adına yazıyor?
+ *
+ * Kişi oturumunda kendi koltuğu. Misafir maçı tek cihazda oynandığı için
+ * sırayla yazılıyor: henüz göndermemiş olan koltuk.
+ */
+function seatFor(
+  match: NonNullable<Awaited<ReturnType<typeof loadMatch>>>,
+  session: Parameters<typeof canAct>[1],
+  state: IsimSehirState,
+): 0 | 1 | null {
+  if (match.guest) {
+    if (state.phase === "yazma") return state.submitted[0] ? 1 : 0;
+    return state.voted[0] ? 1 : 0;
+  }
+  const user = sessionUser(session);
+  if (user === null) return null;
+  const seat = match.seats[user];
+  return seat === undefined ? null : (seat as 0 | 1);
+}
 
 function drawLetter(previous?: string): string {
   let letter = LETTERS[randomInt(0, LETTERS.length)];
@@ -52,12 +74,24 @@ function deadlineFor(mode: "ONLINE" | "LOCAL"): number | null {
  */
 export async function createIsimSehirMatch(mode: "ONLINE" | "LOCAL"): Promise<string> {
   const session = await requireSession();
+  const user = sessionUser(session);
+
+  if (user === null) {
+    return createMatch({
+      game: "ISIM_SEHIR",
+      mode: "LOCAL",
+      creator: "bilal",
+      state: initialState(drawLetter(), null),
+      status: "ACTIVE",
+      guest: true,
+    });
+  }
 
   if (mode === "LOCAL") {
     const id = await createMatch({
       game: "ISIM_SEHIR",
       mode,
-      creator: session.user,
+      creator: user,
       state: initialState(drawLetter(), deadlineFor(mode)),
       status: "ACTIVE",
     });
@@ -67,7 +101,7 @@ export async function createIsimSehirMatch(mode: "ONLINE" | "LOCAL"): Promise<st
 
   const { id, joined } = await joinOrCreateOnlineMatch({
     game: "ISIM_SEHIR",
-    user: session.user,
+    user,
     createState: () => initialState(drawLetter(), deadlineFor("ONLINE")),
     // Süre beklerken akmasın: rakip katıldığı an 90 saniye baştan başlar.
     onStart: () => initialState(drawLetter(), deadlineFor("ONLINE")),
@@ -107,8 +141,8 @@ export async function submitIsimSehirAnswers(
   const state = match.state as IsimSehirState;
   if (state.phase !== "yazma") return fail("Yazma süresi bitti.");
 
-  const seat = match.seats[session.user];
-  if (seat === undefined) return fail("Bu maçta değilsin.");
+  const seat = seatFor(match, session, state);
+  if (seat === null) return fail("Bu maçta değilsin.");
 
   const answers: Answers = { ...emptyAnswers() };
   for (const { key } of CATEGORIES) {
@@ -150,8 +184,8 @@ export async function submitIsimSehirVotes(
   const state = match.state as IsimSehirState;
   if (state.phase !== "onay") return fail("Şu an oylama yok.");
 
-  const seat = match.seats[session.user];
-  if (seat === undefined) return fail("Bu maçta değilsin.");
+  const seat = seatFor(match, session, state);
+  if (seat === null) return fail("Bu maçta değilsin.");
 
   const clean: Partial<Record<Category, boolean>> = {};
   for (const { key } of CATEGORIES) {
@@ -192,9 +226,7 @@ export async function advanceIsimSehirRound(matchId: string): Promise<ActionResu
 
   const state = match.state as IsimSehirState;
   if (state.phase !== "sonuc") return fail("Tur henüz bitmedi.");
-  if (!canAct(match, session.user, 0) && match.seats[session.user] === undefined) {
-    return fail("Bu maçta değilsin.");
-  }
+  if (!canAct(match, session, 0)) return fail("Bu maçta değilsin.");
 
   if (state.round >= TOTAL_ROUNDS) {
     const winner =
@@ -210,7 +242,7 @@ export async function advanceIsimSehirRound(matchId: string): Promise<ActionResu
       scoreDelta: 1,
     });
     emitMatchState(matchId, next);
-    revalidatePath("/sampiyona");
+    if (!match.guest) revalidatePath("/sampiyona");
     return { ok: true, state: next };
   }
 

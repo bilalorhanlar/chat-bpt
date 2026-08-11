@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LogOut, Settings } from "lucide-react";
 
-export function UserMenu({ name, accent }: { name: string; accent: string }) {
+export function UserMenu({
+  name,
+  accent,
+  guest = false,
+}: {
+  name: string;
+  accent: string;
+  /** Misafir oturumu — ayarlar gizlenir. */
+  guest?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -53,15 +62,17 @@ export function UserMenu({ name, accent }: { name: string; accent: string }) {
           <p className="border-b border-line px-4 py-2.5 text-[0.75rem] text-ink-faint">
             Giriş: <span className="font-medium text-ink">{name}</span>
           </p>
-          <Link
-            href="/ayarlar"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-2.5 text-[0.88rem] text-ink transition-colors hover:bg-brand-50"
-          >
-            <Settings className="size-4 text-ink-soft" strokeWidth={1.6} aria-hidden />
-            Ayarlar
-          </Link>
+          {guest ? null : (
+            <Link
+              href="/ayarlar"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-[0.88rem] text-ink transition-colors hover:bg-brand-50"
+            >
+              <Settings className="size-4 text-ink-soft" strokeWidth={1.6} aria-hidden />
+              Ayarlar
+            </Link>
+          )}
           <button
             type="button"
             role="menuitem"

@@ -5,6 +5,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { findOpenMatch } from "@/lib/match";
 import { getPeople, partnerOf } from "@/lib/people";
 import { requireSession } from "@/lib/session";
+import { sessionUser } from "@/lib/auth";
 import { createTavlaMatch } from "./actions";
 
 export const metadata: Metadata = { title: "Tavla" };
@@ -12,7 +13,9 @@ export const dynamic = "force-dynamic";
 
 export default async function TavlaLobbyPage() {
   const [session, people] = await Promise.all([requireSession(), getPeople()]);
-  const open = await findOpenMatch("TAVLA", session.user);
+  const user = sessionUser(session);
+  // Misafirin "devam et" kartı yok: maçları geçici.
+  const open = user ? await findOpenMatch("TAVLA", user) : null;
 
   return (
     <PageShell title="Tavla" eyebrow="oyun" back="/">
@@ -23,7 +26,7 @@ export default async function TavlaLobbyPage() {
         basePath="/oyunlar/tavla"
         openMatch={open ? { id: open.id, mode: open.mode, status: open.status } : null}
         createMatch={createTavlaMatch}
-        partnerName={people[partnerOf(session.user)].name}
+        partnerName={user ? people[partnerOf(user)].name : "Rakip"}
         rules={[
           "Online seçince rakip katılana kadar oyun başlamaz; ikiniz de bastığınızda aynı odada buluşursunuz.",
           "Zar her turda otomatik atılıyor — sunucu atar, kimse zarını seçemez.",

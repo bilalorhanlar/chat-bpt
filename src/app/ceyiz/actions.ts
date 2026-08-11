@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { PERSON_KEYS } from "@/config/site";
 import { db } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 /**
  * Çeyiz listesi.
@@ -45,7 +45,7 @@ async function saveCategories(list: string[]) {
 export async function addCeyizCategory(
   name: string,
 ): Promise<{ ok: true; categories: string[] } | { ok: false; error: string }> {
-  await requireSession();
+  await requirePerson();
   const trimmed = name.trim();
   if (!trimmed || trimmed.length > 40) return { ok: false, error: "Kategori adı geçersiz." };
 
@@ -64,7 +64,7 @@ export async function addCeyizCategory(
 export async function removeCeyizCategory(
   name: string,
 ): Promise<{ ok: true; categories: string[] } | { ok: false; error: string }> {
-  await requireSession();
+  await requirePerson();
   const count = await db.ceyizItem.count({ where: { category: name } });
   if (count > 0) return { ok: false, error: "Önce içindeki öğeleri sil ya da taşı." };
 
@@ -85,14 +85,14 @@ const AddInput = z.object({
 export async function addCeyizItem(
   input: z.infer<typeof AddInput>,
 ): Promise<{ ok: true; item: CeyizItemView } | { ok: false; error: string }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   const parsed = AddInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
   }
 
   const created = await db.ceyizItem.create({
-    data: { ...parsed.data, createdById: session.user },
+    data: { ...parsed.data, createdById: user },
   });
 
   revalidatePath("/ceyiz");
@@ -110,7 +110,7 @@ const PatchInput = z.object({
 export async function updateCeyizItem(
   input: z.infer<typeof PatchInput>,
 ): Promise<{ ok: true; item: CeyizItemView } | { ok: false; error: string }> {
-  await requireSession();
+  await requirePerson();
   const parsed = PatchInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Geçersiz girdi." };
 
@@ -121,7 +121,7 @@ export async function updateCeyizItem(
 }
 
 export async function deleteCeyizItem(id: string): Promise<{ ok: boolean }> {
-  await requireSession();
+  await requirePerson();
   await db.ceyizItem.delete({ where: { id } });
   revalidatePath("/ceyiz");
   return { ok: true };

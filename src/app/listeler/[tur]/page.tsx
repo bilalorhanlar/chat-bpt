@@ -8,7 +8,7 @@ import { PERSON_KEYS, type PersonKey } from "@/config/site";
 import { db } from "@/lib/db";
 import { LISTS, isListSlug } from "@/lib/lists";
 import { getPeople } from "@/lib/people";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 import type { ListItemView } from "./actions";
 
 type Props = { params: Promise<{ tur: string }> };
@@ -34,8 +34,8 @@ export default async function ListPage({ params }: Props) {
   if (!isListSlug(tur)) notFound();
 
   const config = LISTS[tur];
-  const [session, people, rows] = await Promise.all([
-    requireSession(),
+  const [user, people, rows] = await Promise.all([
+    requirePerson(),
     getPeople(),
     db.listItem.findMany({
       where: { list: LISTS[tur].type },
@@ -72,7 +72,7 @@ export default async function ListPage({ params }: Props) {
         <MediaBoard
           config={config}
           initialItems={items}
-          me={session.user}
+          me={user}
           people={people}
         />
       ) : (

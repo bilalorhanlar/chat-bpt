@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { openSecret, sealSecret } from "@/lib/secret-box";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 /**
  * Parola kasası eylemleri.
@@ -35,7 +35,7 @@ export type CredentialView = {
 export async function saveCredential(
   input: z.infer<typeof SaveInput>,
 ): Promise<{ ok: true; item: CredentialView } | { ok: false; error: string }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   const parsed = SaveInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
@@ -50,7 +50,7 @@ export async function saveCredential(
 
   const row = parsed.data.id
     ? await db.credential.update({ where: { id: parsed.data.id }, data })
-    : await db.credential.create({ data: { ...data, createdById: session.user } });
+    : await db.credential.create({ data: { ...data, createdById: user } });
 
   revalidatePath("/sifreler");
   return {
@@ -70,7 +70,7 @@ export async function saveCredential(
 export async function revealCredential(
   id: string,
 ): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
-  await requireSession();
+  await requirePerson();
   const row = await db.credential.findUnique({ where: { id } });
   if (!row) return { ok: false, error: "Kayıt bulunamadı." };
 
@@ -85,7 +85,7 @@ export async function revealCredential(
 }
 
 export async function deleteCredential(id: string): Promise<{ ok: boolean }> {
-  await requireSession();
+  await requirePerson();
   await db.credential.delete({ where: { id } });
   revalidatePath("/sifreler");
   return { ok: true };

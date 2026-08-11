@@ -36,6 +36,12 @@ export function LockForm({ next }: { next: string }) {
           setShake((n) => n + 1);
           return;
         }
+        // Misafir PIN'inde "kimsin?" adımı yok — oturum sunucuda açıldı.
+        if (data.misafir) {
+          router.replace("/oyunlar");
+          router.refresh();
+          return;
+        }
         setStep("kim");
       } catch {
         setError("Bağlantı kurulamadı.");
@@ -45,7 +51,7 @@ export function LockForm({ next }: { next: string }) {
         setBusy(false);
       }
     },
-    [],
+    [router],
   );
 
   // Dördüncü rakam girilince kendiliğinden gönder — ayrıca "Giriş" tuşu yok.
@@ -164,7 +170,12 @@ export function LockForm({ next }: { next: string }) {
         )}
       </div>
 
-      <div className="mt-5 flex min-h-6 items-center justify-center">
+      <p className="mt-6 text-center text-[0.75rem] leading-relaxed text-ink-faint">
+        Misafirsen <span className="font-semibold text-ink-soft">0000</span> gir — yalnızca
+        oyunlar açılır.
+      </p>
+
+      <div className="mt-3 flex min-h-6 items-center justify-center">
         {busy ? (
           <Loader2 className="size-4 animate-spin text-brand-400" aria-hidden />
         ) : error ? (

@@ -44,7 +44,8 @@ export default async function SampiyonaPage() {
   const [people, matches, hafiza] = await Promise.all([
     getPeople(),
     db.gameMatch.findMany({
-      where: { status: "FINISHED", game: { in: VERSUS } },
+      // Misafir maçları tabloya girmiyor.
+      where: { status: "FINISHED", guest: false, game: { in: VERSUS } },
       orderBy: { finishedAt: "desc" },
       select: {
         id: true,
@@ -56,7 +57,7 @@ export default async function SampiyonaPage() {
       },
     }),
     db.gameMatch.findMany({
-      where: { game: "HAFIZA", durationMs: { not: null } },
+      where: { game: "HAFIZA", guest: false, durationMs: { not: null } },
       orderBy: { durationMs: "asc" },
       select: { winnerId: true, durationMs: true, finishedAt: true },
     }),

@@ -1,11 +1,10 @@
 import type { Server, Socket } from "socket.io";
 
-import type { PersonKey } from "@/config/site";
-import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, readSessionToken, sessionUser, type Session } from "@/lib/auth";
 import { matchRoom, setIoServer } from "@/lib/realtime";
 
-/** Kimliği doğrulanmış soket — `data.user` her zaman doludur. */
-export type GameSocket = Socket & { data: { user: PersonKey } };
+/** Kimliği doğrulanmış soket. Misafirde `user` null olur. */
+export type GameSocket = Socket & { data: { session: Session; user: string | null } };
 
 /** `a=1; b=2` → { a: "1", b: "2" } */
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -32,13 +31,15 @@ export function registerRealtime(io: Server) {
     const cookies = parseCookies(socket.handshake.headers.cookie);
     const session = await readSessionToken(cookies[SESSION_COOKIE]);
     if (!session) return nextFn(new Error("yetkisiz"));
-    socket.data.user = session.user;
+    socket.data.session = session;
+    socket.data.user = sessionUser(session);
     nextFn();
   });
 
   io.on("connection", (socket) => {
     const s = socket as GameSocket;
-    void s.join(`user:${s.data.user}`);
+    // Misafirin kişisel odası yok; yalnızca maç odalarına katılır.
+    if (s.data.user) void s.join(`user:${s.data.user}`);
 
     s.on("match:join", (matchId: unknown) => {
       if (typeof matchId !== "string" || matchId.length === 0) return;

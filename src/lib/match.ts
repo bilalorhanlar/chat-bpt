@@ -2,7 +2,8 @@ import { randomInt } from "node:crypto";
 
 import type { Game, MatchMode, MatchStatus } from "@prisma/client";
 
-import { PERSON_KEYS, type PersonKey } from "@/config/site";
+import type { PersonKey } from "@/config/site";
+import { isGuest, sessionUser, type Session } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 /**
@@ -25,8 +26,25 @@ export type LoadedMatch = {
   seats: Record<PersonKey, number>;
   /** Koltuk numarasından kullanıcıya ters eşleme. */
   bySeat: Record<number, PersonKey>;
+  /** Misafir maçı — şampiyonaya ve rekorlara yazılmaz. */
+  guest: boolean;
   ply: number;
 };
+
+/**
+ * Koltuk dağılımı sabit: **Sümeyye her zaman 0 (beyaz), Bilal 1 (siyah)**.
+ *
+ * Maçı kim açtığına göre değişseydi tahtadaki renkler her oyunda yer
+ * değiştirirdi; oyuncular kendi rengini aramak zorunda kalıyordu.
+ */
+export const FIXED_SEATS: Array<{ userId: PersonKey; seat: number }> = [
+  { userId: "partner", seat: 0 },
+  { userId: "bilal", seat: 1 },
+];
+
+export function seatOf(user: PersonKey): number {
+  return FIXED_SEATS.find((s) => s.userId === user)!.seat;
+}
 
 export function partnerKey(user: PersonKey): PersonKey {
   return user === "bilal" ? "partner" : "bilal";
@@ -44,6 +62,8 @@ export async function createMatch(input: {
   state: unknown;
   /** ONLINE maçlar karşı taraf katılana kadar WAITING'de bekler. */
   status?: MatchStatus;
+  /** Misafir maçı mı — şampiyonaya yazılmaz. */
+  guest?: boolean;
 }): Promise<string> {
   const other = partnerKey(input.creator);
 
@@ -58,12 +78,12 @@ export async function createMatch(input: {
   const waitingForOpponent = input.mode === "ONLINE" && input.status === "WAITING";
   const seats: Array<{ userId: PersonKey; seat: number }> =
     input.mode === "LOCAL"
-      ? PERSON_KEYS.map((key, index) => ({ userId: key, seat: index }))
+      ? FIXED_SEATS
       : waitingForOpponent
-        ? [{ userId: input.creator, seat: 0 }]
+        ? [{ userId: input.creator, seat: seatOf(input.creator) }]
         : [
-            { userId: input.creator, seat: 0 },
-            { userId: other, seat: 1 },
+            { userId: input.creator, seat: seatOf(input.creator) },
+            { userId: other, seat: seatOf(other) },
           ];
 
   const match = await db.gameMatch.create({
@@ -72,6 +92,7 @@ export async function createMatch(input: {
       mode: input.mode,
       status: input.status ?? "ACTIVE",
       state: input.state as never,
+      guest: input.guest ?? false,
       players: { create: seats },
     },
   });
@@ -103,6 +124,7 @@ export async function loadMatch(id: string): Promise<LoadedMatch | null> {
     result: row.result,
     seats,
     bySeat,
+    guest: row.guest,
     ply: row._count.moves,
   };
 }
@@ -138,6 +160,7 @@ export async function joinOrCreateOnlineMatch(input: {
       game: input.game,
       mode: "ONLINE",
       status: "WAITING",
+      guest: false,
       players: { some: { userId: input.user } },
     },
     orderBy: { createdAt: "desc" },
@@ -151,6 +174,7 @@ export async function joinOrCreateOnlineMatch(input: {
       game: input.game,
       mode: "ONLINE",
       status: "WAITING",
+      guest: false,
       players: { some: { userId: other } },
       NOT: { players: { some: { userId: input.user } } },
     },
@@ -162,7 +186,7 @@ export async function joinOrCreateOnlineMatch(input: {
     // Koltuğu şimdi ekle: karşı taraf gerçekten odaya girdi.
     await db.$transaction([
       db.matchPlayer.create({
-        data: { matchId: waiting.id, userId: input.user, seat: 1 },
+        data: { matchId: waiting.id, userId: input.user, seat: seatOf(input.user) },
       }),
       db.gameMatch.update({
         where: { id: waiting.id },
@@ -192,11 +216,34 @@ export async function joinOrCreateOnlineMatch(input: {
  * kontrol yalnızca maçın katılımcısı olmakla sınırlı. Online maçta sıranın
  * gerçekten o kişide olması gerekiyor.
  */
-export function canAct(match: LoadedMatch, user: PersonKey, turnSeat: number): boolean {
+export function canAct(match: LoadedMatch, session: Session, turnSeat: number): boolean {
+  // Misafir maçı tek cihazda oynanıyor; iki tarafı da aynı kişi sürüyor.
+  if (match.guest) return isGuest(session) || sessionUser(session) !== null;
+
+  const user = sessionUser(session);
+  if (user === null) return false; // misafir, misafir olmayan maça karışamaz
+
   const seat = match.seats[user];
   if (seat === undefined) return false;
   if (match.mode === "LOCAL") return true;
   return seat === turnSeat;
+}
+
+/**
+ * Bu oturum bu maçı açabilir mi, açabiliyorsa hangi koltukta oturuyor?
+ * Misafir maçında koltuk yok — iki tarafı da o sürüyor.
+ */
+export function matchAccess(
+  match: LoadedMatch,
+  session: Session,
+): { allowed: boolean; mySeat: number | null } {
+  if (match.guest) return { allowed: true, mySeat: null };
+
+  const user = sessionUser(session);
+  if (user === null) return { allowed: false, mySeat: null };
+
+  const seat = match.seats[user];
+  return { allowed: seat !== undefined, mySeat: seat ?? null };
 }
 
 export async function saveState(id: string, state: unknown) {
@@ -249,6 +296,7 @@ export async function findOpenMatch(game: Game, user: PersonKey) {
   return db.gameMatch.findFirst({
     where: {
       game,
+      guest: false,
       status: { in: ["WAITING", "ACTIVE"] },
       players: { some: { userId: user } },
     },

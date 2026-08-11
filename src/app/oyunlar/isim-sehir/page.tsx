@@ -6,6 +6,7 @@ import { TOTAL_ROUNDS } from "@/games/isim-sehir/types";
 import { findOpenMatch } from "@/lib/match";
 import { getPeople, partnerOf } from "@/lib/people";
 import { requireSession } from "@/lib/session";
+import { sessionUser } from "@/lib/auth";
 import { createIsimSehirMatch } from "./actions";
 
 export const metadata: Metadata = { title: "İsim Şehir" };
@@ -13,7 +14,9 @@ export const dynamic = "force-dynamic";
 
 export default async function IsimSehirLobbyPage() {
   const [session, people] = await Promise.all([requireSession(), getPeople()]);
-  const open = await findOpenMatch("ISIM_SEHIR", session.user);
+  const user = sessionUser(session);
+  // Misafirin "devam et" kartı yok: maçları geçici.
+  const open = user ? await findOpenMatch("ISIM_SEHIR", user) : null;
 
   return (
     <PageShell title="İsim Şehir" eyebrow="oyun" back="/">
@@ -24,7 +27,7 @@ export default async function IsimSehirLobbyPage() {
         basePath="/oyunlar/isim-sehir"
         openMatch={open ? { id: open.id, mode: open.mode, status: open.status } : null}
         createMatch={createIsimSehirMatch}
-        partnerName={people[partnerOf(session.user)].name}
+        partnerName={user ? people[partnerOf(user)].name : "Rakip"}
         rules={[
           "Online seçince rakip katılana kadar süre başlamaz; ikiniz de bastığınızda aynı odada buluşursunuz.",
           "Kelimeleri sözlük değil, karşı taraf onaylar — geçersiz saydığına çarpı koyar.",

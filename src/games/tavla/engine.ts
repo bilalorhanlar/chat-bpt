@@ -4,6 +4,7 @@ import {
   OFF,
   type Move,
   type Player,
+  type Reach,
   type Result,
   type TavlaState,
 } from "./types";
@@ -247,6 +248,55 @@ export function legalMoves(state: TavlaState): Move[] {
   }
 
   return candidates;
+}
+
+/**
+ * Bir pulun **bu turda** varabileceği tüm haneler, oraya götüren adımlarla.
+ *
+ * Tek zarlık hamleler yetmiyordu: aynı pul iki zarı da oynayıp daha ileri
+ * gidebiliyorsa oyuncu bunu göremiyordu. Burası zincirleme hamleleri de
+ * buluyor — 3 ve 5 varken bir pul hem 3, hem 5, hem de 8 ileri gidebilir;
+ * üçü de gösterilmeli.
+ *
+ * Genişlik öncelikli arama: aynı haneye birden çok yoldan varılıyorsa en az
+ * zar harcayan yol seçiliyor. Toplama (OFF) bir bitiş noktası, oradan devam
+ * edilmiyor.
+ */
+export function reachableFrom(state: TavlaState, from: number): Reach[] {
+  const best = new Map<number, Move[]>();
+  const queue: Array<{ position: number; state: TavlaState; path: Move[] }> = [
+    { position: from, state, path: [] },
+  ];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.path.length >= 4) continue;
+
+    for (const move of legalMoves(current.state)) {
+      if (move.from !== current.position) continue;
+
+      const to = move.to as number;
+      const path = [...current.path, move];
+
+      // İlk bulunan yol en kısasıdır (BFS); sonrakiler daha uzun.
+      if (!best.has(to)) best.set(to, path);
+
+      // Toplanan pul tahtadan çıktı, oradan devam edilmez.
+      if (move.to === OFF) continue;
+
+      queue.push({ position: to, state: applyMoveUnchecked(current.state, move), path });
+    }
+  }
+
+  return [...best.entries()].map(([to, path]) => ({ to, path }));
+}
+
+/**
+ * Sıradaki oyuncunun oynatabileceği pulların bulunduğu haneler.
+ * (`legalMoves` ile aynı kaynak listesi, ama yalnızca hane numaraları.)
+ */
+export function movableSources(state: TavlaState): number[] {
+  return [...new Set(legalMoves(state).map((m) => m.from as number))];
 }
 
 /* --- genel API ---------------------------------------------------------- */

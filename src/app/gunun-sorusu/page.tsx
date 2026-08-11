@@ -5,7 +5,7 @@ import { QuestionOfTheDay, type ArchiveEntry } from "@/components/questions/ques
 import { PERSON_KEYS, type PersonKey } from "@/config/site";
 import { db } from "@/lib/db";
 import { getPeople, partnerOf } from "@/lib/people";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 import { questionForDate } from "@/lib/daily-question";
 import { toDateString, todayDateOnly } from "@/lib/date-only";
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Günün Sorusu" };
 export const dynamic = "force-dynamic";
 
 export default async function QuestionPage() {
-  const [session, people] = await Promise.all([requireSession(), getPeople()]);
+  const [user, people] = await Promise.all([requirePerson(), getPeople()]);
   const today = todayDateOnly();
 
   const row = await db.dailyQuestion.findUnique({
@@ -26,7 +26,7 @@ export default async function QuestionPage() {
 
   // Karşı tarafın cevabı ikisi de yazana kadar istemciye **hiç** gönderilmiyor.
   // Gizlemeyi arayüze bırakmak, ağ sekmesinden okunabilir olurdu.
-  const partnerKey: PersonKey = partnerOf(session.user);
+  const partnerKey: PersonKey = partnerOf(user);
 
   const archiveRows = await db.dailyQuestion.findMany({
     where: { date: { lt: today } },
@@ -51,9 +51,9 @@ export default async function QuestionPage() {
       <QuestionOfTheDay
         date={toDateString(today)}
         question={row?.text ?? questionForDate(today)}
-        me={people[session.user]}
+        me={people[user]}
         partner={people[partnerKey]}
-        myAnswer={answers.get(session.user) ?? null}
+        myAnswer={answers.get(user) ?? null}
         partnerAnswer={bothAnswered ? (answers.get(partnerKey) ?? null) : null}
         partnerAnswered={answers.has(partnerKey)}
         archive={archive}

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 const WriteInput = z.object({
   title: z.string().trim().min(1, "Başlık boş olamaz").max(120, "Başlık çok uzun"),
@@ -16,7 +16,7 @@ const WriteInput = z.object({
 export async function writeLetter(
   input: z.infer<typeof WriteInput>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   const parsed = WriteInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
@@ -32,8 +32,8 @@ export async function writeLetter(
 
   await db.letter.create({
     data: {
-      fromId: session.user,
-      toId: session.user === "bilal" ? "partner" : "bilal",
+      fromId: user,
+      toId: user === "bilal" ? "partner" : "bilal",
       title: parsed.data.title,
       body: parsed.data.body,
       openAt,
@@ -51,10 +51,10 @@ export async function writeLetter(
  * tarihi kontrol edip gönderiyor. Tek kaynak orası kalsın.
  */
 export async function markLetterOpened(id: string): Promise<{ ok: boolean }> {
-  const session = await requireSession();
+  const user = await requirePerson();
 
   const letter = await db.letter.findUnique({ where: { id } });
-  if (!letter || letter.toId !== session.user) return { ok: false };
+  if (!letter || letter.toId !== user) return { ok: false };
   if (letter.openAt.getTime() > Date.now()) return { ok: false };
 
   if (!letter.openedAt) {
@@ -65,10 +65,10 @@ export async function markLetterOpened(id: string): Promise<{ ok: boolean }> {
 }
 
 export async function deleteLetter(id: string): Promise<{ ok: boolean }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   const letter = await db.letter.findUnique({ where: { id } });
   // Yalnızca yazan silebilir, o da açılmadan önce.
-  if (!letter || letter.fromId !== session.user || letter.openedAt) return { ok: false };
+  if (!letter || letter.fromId !== user || letter.openedAt) return { ok: false };
   await db.letter.delete({ where: { id } });
   revalidatePath("/mektuplar");
   return { ok: true };

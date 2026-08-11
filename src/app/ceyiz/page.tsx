@@ -4,15 +4,15 @@ import { CeyizBoard } from "@/components/ceyiz/ceyiz-board";
 import { PageShell } from "@/components/layout/page-shell";
 import { db } from "@/lib/db";
 import { getPeople } from "@/lib/people";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 import { getCeyizCategories } from "./actions";
 
 export const metadata: Metadata = { title: "Çeyiz" };
 export const dynamic = "force-dynamic";
 
 export default async function CeyizPage() {
-  const [session, people, categories, items] = await Promise.all([
-    requireSession(),
+  const [user, people, categories, items] = await Promise.all([
+    requirePerson(),
     getPeople(),
     getCeyizCategories(),
     db.ceyizItem.findMany({ orderBy: { createdAt: "asc" } }),
@@ -23,7 +23,7 @@ export default async function CeyizPage() {
       <CeyizBoard
         initialCategories={categories}
         initialItems={items}
-        me={session.user}
+        me={user}
         people={people}
       />
     </PageShell>

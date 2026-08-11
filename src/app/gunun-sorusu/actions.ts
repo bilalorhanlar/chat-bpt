@@ -6,7 +6,7 @@ import { z } from "zod";
 import { questionForDate } from "@/lib/daily-question";
 import { todayDateOnly } from "@/lib/date-only";
 import { db } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 /**
  * Günün sorusu.
@@ -26,7 +26,7 @@ const AnswerInput = z.object({
 export async function answerQuestion(
   input: z.infer<typeof AnswerInput>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   const parsed = AnswerInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
@@ -48,8 +48,8 @@ export async function answerQuestion(
   });
 
   await db.questionAnswer.upsert({
-    where: { questionId_userId: { questionId: question.id, userId: session.user } },
-    create: { questionId: question.id, userId: session.user, text: parsed.data.text },
+    where: { questionId_userId: { questionId: question.id, userId: user } },
+    create: { questionId: question.id, userId: user, text: parsed.data.text },
     update: { text: parsed.data.text },
   });
 

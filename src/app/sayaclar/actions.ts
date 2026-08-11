@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { fromDateString, toDateString } from "@/lib/date-only";
 import { db } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 const AddInput = z.object({
   title: z.string().trim().min(1, "Başlık boş olamaz").max(80, "Başlık çok uzun"),
@@ -28,7 +28,7 @@ export type CountdownView = {
 export async function addCountdown(
   input: z.infer<typeof AddInput>,
 ): Promise<{ ok: true; item: CountdownView } | { ok: false; error: string }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   const parsed = AddInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
@@ -40,7 +40,7 @@ export async function addCountdown(
       date: fromDateString(parsed.data.date),
       emoji: parsed.data.emoji || null,
       repeatYearly: parsed.data.repeatYearly,
-      createdById: session.user,
+      createdById: user,
     },
   });
 
@@ -59,7 +59,7 @@ export async function addCountdown(
 }
 
 export async function deleteCountdown(id: string) {
-  await requireSession();
+  await requirePerson();
   await db.countdown.delete({ where: { id } });
   revalidatePath("/sayaclar");
 }

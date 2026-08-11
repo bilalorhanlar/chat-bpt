@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { sessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
@@ -25,11 +26,15 @@ export async function saveHafizaScore(
   input: z.infer<typeof ScoreInput>,
 ): Promise<{ ok: true; best: boolean } | { ok: false; error: string }> {
   const session = await requireSession();
+  const user = sessionUser(session);
   const parsed = ScoreInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Geçersiz skor." };
 
+  // Misafirin skoru rekor tablosuna girmiyor; oyun yine oynanabiliyor.
+  if (user === null) return { ok: true, best: false };
+
   const previousBest = await db.gameMatch.findFirst({
-    where: { game: "HAFIZA", winnerId: session.user, durationMs: { not: null } },
+    where: { game: "HAFIZA", winnerId: user, durationMs: { not: null } },
     orderBy: { durationMs: "asc" },
     select: { durationMs: true },
   });
@@ -40,12 +45,12 @@ export async function saveHafizaScore(
       mode: "LOCAL",
       status: "FINISHED",
       state: { moves: parsed.data.moves, pairs: parsed.data.pairs },
-      winnerId: session.user,
+      winnerId: user,
       result: "NORMAL",
       scoreDelta: 1,
       durationMs: parsed.data.durationMs,
       finishedAt: new Date(),
-      players: { create: [{ userId: session.user, seat: 0 }] },
+      players: { create: [{ userId: user, seat: 0 }] },
     },
   });
 

@@ -3,18 +3,38 @@ import { SignJWT, jwtVerify } from "jose";
 import { PERSON_KEYS, type PersonKey } from "@/config/site";
 
 /**
- * Ortak PIN + "kimsin?" seçimi.
+ * Giriş: ortak PIN + "kimsin?" seçimi, ya da misafir PIN'i.
  *
  * Oturum imzalı bir JWT olarak `httpOnly` çerezde duruyor; veritabanında oturum
- * tablosu yok. İki kullanıcılı bir site için sunucu tarafı oturum deposu
- * tutmanın getirisi yok, ama JWT'nin Edge çalışma zamanında doğrulanabilmesi
- * `middleware`'in veritabanına hiç dokunmadan çalışmasını sağlıyor.
+ * tablosu yok. İki kişilik bir site için sunucu tarafı oturum deposu tutmanın
+ * getirisi yok, ama JWT'nin Edge çalışma zamanında doğrulanabilmesi
+ * `proxy`'nin veritabanına hiç dokunmadan çalışmasını sağlıyor.
+ *
+ * **Misafir modu**: arkadaşlar geldiğinde sabit bir PIN'le girip yalnızca oyun
+ * oynayabiliyorlar. Misafir oturumunun kimliği yok; oynadıkları maçlar
+ * `guest` işaretiyle kaydediliyor ve şampiyona tablosuna hiç girmiyor.
  */
 
 export const SESSION_COOKIE = "oturum";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 90; // 90 gün
+/** Misafir oturumu kısa: arkadaşlar gittikten sonra açık kalmasın. */
+const GUEST_MAX_AGE_SECONDS = 60 * 60 * 12;
 
-export type Session = { user: PersonKey };
+/** Misafir girişinin sabit PIN'i. Ortak PIN'den ayrı ve değiştirilemez. */
+export const GUEST_PIN = "0000";
+
+export type Session =
+  | { kind: "kisi"; user: PersonKey }
+  | { kind: "misafir" };
+
+export function isGuest(session: Session | null): boolean {
+  return session?.kind === "misafir";
+}
+
+/** Kişi oturumundaki kullanıcı; misafirse null. */
+export function sessionUser(session: Session | null): PersonKey | null {
+  return session?.kind === "kisi" ? session.user : null;
+}
 
 function secret(): Uint8Array {
   const raw = process.env.AUTH_SECRET;
@@ -30,11 +50,16 @@ function isPersonKey(value: unknown): value is PersonKey {
   return typeof value === "string" && (PERSON_KEYS as readonly string[]).includes(value);
 }
 
-export async function createSessionToken(user: PersonKey): Promise<string> {
-  return new SignJWT({ user })
+export async function createSessionToken(session: Session): Promise<string> {
+  const payload =
+    session.kind === "kisi" ? { user: session.user } : { misafir: true as const };
+
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE_SECONDS}s`)
+    .setExpirationTime(
+      `${session.kind === "kisi" ? MAX_AGE_SECONDS : GUEST_MAX_AGE_SECONDS}s`,
+    )
     .sign(secret());
 }
 
@@ -42,16 +67,33 @@ export async function readSessionToken(token: string | undefined): Promise<Sessi
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return isPersonKey(payload.user) ? { user: payload.user } : null;
+    if (payload.misafir === true) return { kind: "misafir" };
+    return isPersonKey(payload.user) ? { kind: "kisi", user: payload.user } : null;
   } catch {
     return null;
   }
 }
 
-export const sessionCookieOptions = {
-  httpOnly: true,
-  sameSite: "lax",
-  secure: process.env.NODE_ENV === "production",
-  path: "/",
-  maxAge: MAX_AGE_SECONDS,
-} as const;
+export function sessionCookieOptions(guest = false) {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: guest ? GUEST_MAX_AGE_SECONDS : MAX_AGE_SECONDS,
+  } as const;
+}
+
+/**
+ * Misafirin girebileceği yollar.
+ *
+ * Yalnızca oyunlar — listeler, mektuplar, şifreler ve ayarlar kapalı.
+ * Şampiyona da kapalı: misafir maçları oraya yazılmıyor, tabloyu göstermenin
+ * de anlamı yok.
+ */
+export function guestCanAccess(pathname: string): boolean {
+  if (pathname === "/kilit") return true;
+  if (pathname === "/oyunlar" || pathname.startsWith("/oyunlar/")) return true;
+  if (pathname.startsWith("/api/")) return true;
+  return false;
+}

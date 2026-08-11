@@ -12,6 +12,7 @@ import {
   type SatrancState,
   type Seat,
 } from "@/games/satranc/types";
+import { sessionUser } from "@/lib/auth";
 import {
   canAct,
   createMatch,
@@ -56,12 +57,25 @@ function initialState(now: number): SatrancState {
  */
 export async function createSatrancMatch(mode: "ONLINE" | "LOCAL"): Promise<string> {
   const session = await requireSession();
+  const user = sessionUser(session);
+
+  // Misafir: her zaman aynı cihazda ve şampiyonaya yazılmayan maç.
+  if (user === null) {
+    return createMatch({
+      game: "SATRANC",
+      mode: "LOCAL",
+      creator: "bilal",
+      state: initialState(Date.now()),
+      status: "ACTIVE",
+      guest: true,
+    });
+  }
 
   if (mode === "LOCAL") {
     const id = await createMatch({
       game: "SATRANC",
       mode,
-      creator: session.user,
+      creator: user,
       state: initialState(Date.now()),
       status: "ACTIVE",
     });
@@ -71,7 +85,7 @@ export async function createSatrancMatch(mode: "ONLINE" | "LOCAL"): Promise<stri
 
   const { id, joined } = await joinOrCreateOnlineMatch({
     game: "SATRANC",
-    user: session.user,
+    user,
     createState: () => initialState(Date.now()),
     // Saat beklerken akmasın: rakip katıldığı an 5:00'dan başlar.
     onStart: () => initialState(Date.now()),
@@ -101,7 +115,7 @@ export async function makeSatrancMove(input: z.infer<typeof MoveInput>): Promise
 
   const state = match.state as SatrancState;
   const mover = sideToMove(state);
-  if (!canAct(match, session.user, mover)) return fail("Sıra sende değil.");
+  if (!canAct(match, session, mover)) return fail("Sıra sende değil.");
 
   const now = Date.now();
 
@@ -142,14 +156,15 @@ export async function makeSatrancMove(input: z.infer<typeof MoveInput>): Promise
       result: outcome.result,
       scoreDelta: 1,
     });
-    revalidatePath("/sampiyona");
+    if (!match.guest) revalidatePath("/sampiyona");
   } else {
     await saveState(match.id, next);
   }
 
-  await recordMove({
+  const mover2 = sessionUser(session);
+  if (mover2 !== null && !match.guest) await recordMove({
     matchId: match.id,
-    userId: session.user,
+    userId: mover2,
     ply: match.ply,
     data: { from: move.from, to: move.to, san: move.san, piece: move.piece },
     msLeft: left,
@@ -186,11 +201,10 @@ export async function resignSatranc(matchId: string): Promise<ActionResult> {
   if (!match || match.game !== "SATRANC") return fail("Maç bulunamadı.");
   if (match.status === "FINISHED") return fail("Bu maç zaten bitti.");
 
-  const seat = match.seats[session.user];
-  if (seat === undefined) return fail("Bu maçta değilsin.");
-
   const state = match.state as SatrancState;
-  const winner = (seat === 0 ? 1 : 0) as Seat;
+  const mover = sideToMove(state);
+  if (!canAct(match, session, mover)) return fail("Bu maçta değilsin.");
+  const winner = (mover === 0 ? 1 : 0) as Seat;
   const next: SatrancState = { ...state, winner, result: "TERK" };
 
   await finishMatch({

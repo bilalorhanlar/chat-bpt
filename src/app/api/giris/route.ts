@@ -3,7 +3,12 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { PERSON_KEYS } from "@/config/site";
-import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/auth";
+import {
+  GUEST_PIN,
+  SESSION_COOKIE,
+  createSessionToken,
+  sessionCookieOptions,
+} from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -61,6 +66,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "PIN 4 rakam olmalı." }, { status: 400 });
   }
 
+  /*
+   * Misafir PIN'i ortak PIN'den önce kontrol ediliyor ve "kimsin?" adımı
+   * yok: misafirin kimliği olmadığı için doğrudan oturum açılıyor.
+   */
+  if (parsed.data.pin === GUEST_PIN) {
+    clearAttempts(ip);
+    const token = await createSessionToken({ kind: "misafir" });
+    const response = NextResponse.json({ ok: true, misafir: true });
+    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(true));
+    return response;
+  }
+
   const hash = await pinHash();
   if (!hash) {
     return NextResponse.json(
@@ -81,8 +98,8 @@ export async function POST(request: NextRequest) {
 
   // Adım 2: oturumu aç.
   clearAttempts(ip);
-  const token = await createSessionToken(parsed.data.user);
+  const token = await createSessionToken({ kind: "kisi", user: parsed.data.user });
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
+  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return response;
 }

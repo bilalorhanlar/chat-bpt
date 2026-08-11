@@ -7,7 +7,7 @@ import { PERSON_KEYS, type PersonKey } from "@/config/site";
 import { db } from "@/lib/db";
 import { fetchImdbMeta } from "@/lib/imdb";
 import { LISTS, LIST_SLUGS, type ListSlug } from "@/lib/lists";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 /**
  * Liste eylemleri.
@@ -57,7 +57,7 @@ export type ListItemView = {
 export async function addListItem(input: z.infer<typeof AddInput>): Promise<
   { ok: true; item: ListItemView } | { ok: false; error: string }
 > {
-  const session = await requireSession();
+  const user = await requirePerson();
   const parsed = AddInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
@@ -108,7 +108,7 @@ export async function addListItem(input: z.infer<typeof AddInput>): Promise<
       note: note || null,
       meta: Object.keys(meta).length > 0 ? (meta as never) : undefined,
       order: (top?.order ?? 0) - 1,
-      createdById: session.user,
+      createdById: user,
     },
   });
 
@@ -122,7 +122,7 @@ export async function rateListItem(
   id: string,
   score: number,
 ): Promise<{ ok: true; item: ListItemView } | { ok: false; error: string }> {
-  const session = await requireSession();
+  const user = await requirePerson();
   if (!Number.isInteger(score) || score < 1 || score > 10) {
     return { ok: false, error: "Puan 1 ile 10 arasında olmalı." };
   }
@@ -131,7 +131,7 @@ export async function rateListItem(
   if (!row) return { ok: false, error: "Bulunamadı." };
 
   const meta = ((row.meta as Meta | null) ?? {}) as Meta;
-  meta.ratings = { ...meta.ratings, [session.user]: score };
+  meta.ratings = { ...meta.ratings, [user]: score };
 
   const updated = await db.listItem.update({ where: { id }, data: { meta: meta as never } });
   revalidatePath(`/listeler/${slug}`);
@@ -139,7 +139,7 @@ export async function rateListItem(
 }
 
 export async function toggleListItem(slug: ListSlug, id: string, done: boolean) {
-  await requireSession();
+  await requirePerson();
   await db.listItem.update({
     where: { id },
     data: { done, doneAt: done ? new Date() : null },
@@ -148,7 +148,7 @@ export async function toggleListItem(slug: ListSlug, id: string, done: boolean) 
 }
 
 export async function deleteListItem(slug: ListSlug, id: string) {
-  await requireSession();
+  await requirePerson();
   await db.listItem.delete({ where: { id } });
   revalidatePath(`/listeler/${slug}`);
 }
@@ -158,7 +158,7 @@ export async function updateListItem(
   id: string,
   patch: { title?: string; note?: string | null },
 ) {
-  await requireSession();
+  await requirePerson();
   const title = patch.title?.trim();
   if (title !== undefined && title.length === 0) return;
   await db.listItem.update({
@@ -175,7 +175,7 @@ export async function updateListItem(
  * çakışıyor ve iki kişilik bir listede sıralama nadiren değişiyor.
  */
 export async function moveListItem(slug: ListSlug, id: string, direction: "up" | "down") {
-  await requireSession();
+  await requirePerson();
   const config = LISTS[slug];
 
   const current = await db.listItem.findUnique({ where: { id } });

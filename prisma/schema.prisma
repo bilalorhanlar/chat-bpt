@@ -82,13 +82,17 @@ model GameMatch {
   /// Hafıza oyununun süresi (rekor tablosu için). Diğer oyunlarda null.
   durationMs Int?
 
+  /// Misafir maçı mı — arkadaşlar oynadığında true olur ve şampiyona
+  /// tablosuna, rekorlara, "devam et" listesine hiç girmez.
+  guest Boolean @default(false)
+
   players MatchPlayer[]
   moves   Move[]
 
   createdAt  DateTime  @default(now())
   finishedAt DateTime?
 
-  @@index([game, status])
+  @@index([game, status, guest])
   @@index([finishedAt])
 }
 

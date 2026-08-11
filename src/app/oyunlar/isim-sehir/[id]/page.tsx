@@ -5,7 +5,8 @@ import { IsimSehirGame } from "@/components/games/isim-sehir/isim-sehir-game";
 import { WaitingRoom } from "@/components/games/waiting-room";
 import { PageShell } from "@/components/layout/page-shell";
 import type { IsimSehirState } from "@/games/isim-sehir/types";
-import { loadMatch } from "@/lib/match";
+import { loadMatch, matchAccess } from "@/lib/match";
+import { sessionUser } from "@/lib/auth";
 import { getPeople, partnerOf } from "@/lib/people";
 import { requireSession } from "@/lib/session";
 
@@ -25,7 +26,10 @@ export default async function IsimSehirMatchPage({
   ]);
 
   if (!match || match.game !== "ISIM_SEHIR") notFound();
-  if (match.seats[session.user] === undefined) notFound();
+
+  const access = matchAccess(match, session);
+  if (!access.allowed) notFound();
+  const user = sessionUser(session);
 
   // Rakip katılmadan tahta açılmaz — yoksa herkes kendi odasında tek başına
   // oynar ve iki ayrı maç oluşurdu.
@@ -35,7 +39,7 @@ export default async function IsimSehirMatchPage({
         <WaitingRoom
           matchId={match.id}
           gameTitle="İsim Şehir"
-          partnerName={people[partnerOf(session.user)].name}
+          partnerName={user ? people[partnerOf(user)].name : "Rakip"}
           backHref="/oyunlar/isim-sehir"
         />
       </PageShell>
@@ -53,7 +57,8 @@ export default async function IsimSehirMatchPage({
         initialState={match.state as IsimSehirState}
         mode={match.mode}
         seats={match.bySeat}
-        me={session.user}
+        me={user}
+        guestMode={match.guest}
         people={people}
       />
     </PageShell>

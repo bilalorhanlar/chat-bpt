@@ -38,8 +38,10 @@ export function SatrancGame({
   initialState: SatrancState;
   mode: "ONLINE" | "LOCAL";
   seats: Record<number, PersonKey>;
-  me: PersonKey;
+  /** Misafir oturumunda null. */
+  me: PersonKey | null;
   people: People;
+  guestMode?: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState(initialState);

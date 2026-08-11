@@ -6,7 +6,8 @@ import { WaitingRoom } from "@/components/games/waiting-room";
 import { PageShell } from "@/components/layout/page-shell";
 import type { PersonKey } from "@/config/site";
 import type { TavlaState } from "@/games/tavla/types";
-import { loadMatch } from "@/lib/match";
+import { loadMatch, matchAccess } from "@/lib/match";
+import { sessionUser } from "@/lib/auth";
 import { getPeople, partnerOf } from "@/lib/people";
 import { requireSession } from "@/lib/session";
 
@@ -22,7 +23,10 @@ export default async function TavlaMatchPage({ params }: { params: Promise<{ id:
   ]);
 
   if (!match || match.game !== "TAVLA") notFound();
-  if (match.seats[session.user] === undefined) notFound();
+
+  const access = matchAccess(match, session);
+  if (!access.allowed) notFound();
+  const user = sessionUser(session);
 
   // Rakip katılmadan tahta açılmaz — yoksa herkes kendi odasında tek başına
   // oynar ve iki ayrı maç oluşurdu.
@@ -32,7 +36,7 @@ export default async function TavlaMatchPage({ params }: { params: Promise<{ id:
         <WaitingRoom
           matchId={match.id}
           gameTitle="Tavla"
-          partnerName={people[partnerOf(session.user)].name}
+          partnerName={user ? people[partnerOf(user)].name : "Rakip"}
           backHref="/oyunlar/tavla"
         />
       </PageShell>
@@ -53,9 +57,9 @@ export default async function TavlaMatchPage({ params }: { params: Promise<{ id:
         initialState={match.state as TavlaState}
         mode={match.mode}
         seats={seats}
-        me={session.user}
+        me={user}
+        guestMode={match.guest}
         people={people}
-        finished={match.status === "FINISHED"}
       />
     </PageShell>
   );

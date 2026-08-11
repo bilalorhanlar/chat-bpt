@@ -7,7 +7,7 @@ import { z } from "zod";
 import { PERSON_KEYS } from "@/config/site";
 import { fromDateString } from "@/lib/date-only";
 import { db } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requirePerson } from "@/lib/session";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -18,7 +18,7 @@ const ProfileInput = z.object({
 });
 
 export async function saveProfile(input: z.infer<typeof ProfileInput>): Promise<Result> {
-  await requireSession();
+  await requirePerson();
   const parsed = ProfileInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };
@@ -51,7 +51,7 @@ const PinInput = z.object({
 });
 
 export async function changePin(input: z.infer<typeof PinInput>): Promise<Result> {
-  await requireSession();
+  await requirePerson();
   const parsed = PinInput.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Geçersiz girdi" };

@@ -5,6 +5,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { findOpenMatch } from "@/lib/match";
 import { getPeople, partnerOf } from "@/lib/people";
 import { requireSession } from "@/lib/session";
+import { sessionUser } from "@/lib/auth";
 import { createSatrancMatch } from "./actions";
 
 export const metadata: Metadata = { title: "Satranç" };
@@ -12,7 +13,9 @@ export const dynamic = "force-dynamic";
 
 export default async function SatrancLobbyPage() {
   const [session, people] = await Promise.all([requireSession(), getPeople()]);
-  const open = await findOpenMatch("SATRANC", session.user);
+  const user = sessionUser(session);
+  // Misafirin "devam et" kartı yok: maçları geçici.
+  const open = user ? await findOpenMatch("SATRANC", user) : null;
 
   return (
     <PageShell title="Satranç" eyebrow="oyun" back="/">
@@ -23,7 +26,7 @@ export default async function SatrancLobbyPage() {
         basePath="/oyunlar/satranc"
         openMatch={open ? { id: open.id, mode: open.mode, status: open.status } : null}
         createMatch={createSatrancMatch}
-        partnerName={people[partnerOf(session.user)].name}
+        partnerName={user ? people[partnerOf(user)].name : "Rakip"}
         rules={[
           "Online seçince rakip katılana kadar saat başlamaz; ikiniz de bastığınızda aynı odada buluşursunuz.",
           "Süre 5+0: her oyuncuya 5 dakika, hamle başına ekleme yok.",

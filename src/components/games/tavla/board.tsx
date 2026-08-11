@@ -1,9 +1,73 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { BAR, OFF, type Move, type Player, type TavlaState } from "@/games/tavla/types";
+import { BAR, OFF, type Player, type Reach, type TavlaState } from "@/games/tavla/types";
 import { cn } from "@/lib/utils";
+
+/** Tahta yönü: hangi tarafa toplanacağı ve hangi yarının altta olduğu. */
+export type Orientation = {
+  /** Sağ/sol aynalama — toplama tepsisi hangi kenarda. */
+  flipX: boolean;
+  /** Üst/alt çevirme. */
+  flipY: boolean;
+  toggleX: () => void;
+  toggleY: () => void;
+};
+
+const ORIENTATION_KEY = "tavla-yon";
+
+/**
+ * Tahta yönü tercihi.
+ *
+ * Tarayıcıda saklanıyor (veritabanında değil): tercih cihaza bağlı — aynı
+ * kişi telefonu ve bilgisayarı farklı tutabiliyor — ve misafir oturumunda da
+ * çalışması gerekiyor. İlk karede varsayılan çiziliyor, tercih `useEffect`
+ * ile geliyor; sunucu tarafında localStorage olmadığı için hidrasyon
+ * uyuşmazlığı böyle engelleniyor.
+ */
+export function useBoardOrientation(): Orientation {
+  const [flipX, setFlipX] = useState(false);
+  const [flipY, setFlipY] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ORIENTATION_KEY) ?? "{}");
+      setFlipX(Boolean(saved.flipX));
+      setFlipY(Boolean(saved.flipY));
+    } catch {
+      // Bozuk kayıt: varsayılanla devam.
+    }
+  }, []);
+
+  const save = useCallback((next: { flipX: boolean; flipY: boolean }) => {
+    localStorage.setItem(ORIENTATION_KEY, JSON.stringify(next));
+  }, []);
+
+  const toggleX = useCallback(() => {
+    setFlipX((current) => {
+      const next = !current;
+      setFlipY((y) => {
+        save({ flipX: next, flipY: y });
+        return y;
+      });
+      return next;
+    });
+  }, [save]);
+
+  const toggleY = useCallback(() => {
+    setFlipY((current) => {
+      const next = !current;
+      setFlipX((x) => {
+        save({ flipX: x, flipY: next });
+        return x;
+      });
+      return next;
+    });
+  }, [save]);
+
+  return { flipX, flipY, toggleX, toggleY };
+}
 
 /**
  * Tavla tahtası — ahşap/nötr palet, mor yalnızca seçim vurgusunda.
@@ -51,7 +115,8 @@ const DRAG_THRESHOLD = 8;
 
 type Slot = { index: number; x: number; top: boolean };
 
-const SLOTS: Slot[] = [
+/** Varsayılan yerleşim: 13–18 üst sol, 19–24 üst sağ, 12–7 alt sol, 6–1 alt sağ. */
+const BASE_SLOTS: Slot[] = [
   ...[12, 13, 14, 15, 16, 17].map((index, i) => ({ index, x: FRAME + i * POINT_W, top: true })),
   ...[18, 19, 20, 21, 22, 23].map((index, i) => ({
     index,
@@ -62,12 +127,38 @@ const SLOTS: Slot[] = [
   ...[5, 4, 3, 2, 1, 0].map((index, i) => ({ index, x: QUADRANT_B_X + i * POINT_W, top: false })),
 ];
 
+/**
+ * Yön uygulanmış düzen.
+ *
+ * Aynalama CSS `transform: scaleX(-1)` ile yapılmıyor — o, pulların üstündeki
+ * sayı rozetini ve koordinatları da ters çevirirdi. Onun yerine hane
+ * konumları yeniden hesaplanıyor; toplama tepsisi ile bar da onlarla birlikte
+ * yer değiştiriyor.
+ */
+function layoutFor(orientation: { flipX: boolean; flipY: boolean }) {
+  const mirror = (x: number, width: number) => 100 - x - width;
+
+  const slots = BASE_SLOTS.map((slot) => ({
+    index: slot.index,
+    x: orientation.flipX ? mirror(slot.x, POINT_W) : slot.x,
+    top: orientation.flipY ? !slot.top : slot.top,
+  }));
+
+  return {
+    slots,
+    barX: orientation.flipX ? mirror(BAR_X, BAR_W) : BAR_X,
+    trayX: orientation.flipX ? mirror(TRAY_X, TRAY_W) : TRAY_X,
+  };
+}
+
 export type BoardProps = {
   state: TavlaState;
   me: Player;
   selected: number | null;
-  targets: Move[];
+  /** Zincirlenmiş hedefler dahil. */
+  targets: Reach[];
   sources: number[];
+  orientation: { flipX: boolean; flipY: boolean };
   onSelect: (index: number) => void;
   onMoveTo: (to: number) => void;
   disabled?: boolean;
@@ -79,10 +170,12 @@ export function TavlaBoard({
   selected,
   targets,
   sources,
+  orientation,
   onSelect,
   onMoveTo,
   disabled,
 }: BoardProps) {
+  const layout = useMemo(() => layoutFor(orientation), [orientation]);
   const targetSet = useMemo(() => new Set(targets.map((m) => m.to)), [targets]);
   const sourceSet = useMemo(() => new Set(sources), [sources]);
 
@@ -207,15 +300,15 @@ export function TavlaBoard({
       {/* Orta bar */}
       <div
         className="absolute top-0 h-full border-x border-[#2b2620]/25 bg-[#2b2620]/10"
-        style={{ left: `${BAR_X}%`, width: `${BAR_W}%` }}
+        style={{ left: `${layout.barX}%`, width: `${BAR_W}%` }}
       />
       {/* Toplama tepsisi */}
       <div
         className="absolute top-0 h-full border-l border-[#2b2620]/25 bg-[#2b2620]/5"
-        style={{ left: `${TRAY_X}%`, width: `${TRAY_W}%` }}
+        style={{ left: `${layout.trayX}%`, width: `${TRAY_W}%` }}
       />
 
-      {SLOTS.map((slot) => (
+      {layout.slots.map((slot) => (
         <PointColumn
           key={slot.index}
           slot={slot}
@@ -226,8 +319,14 @@ export function TavlaBoard({
         />
       ))}
 
-      <BarStack state={state} me={me} isSource={sourceSet.has(BAR)} isSelected={selected === BAR} />
-      <OffTray state={state} isTarget={targetSet.has(OFF)} />
+      <BarStack
+        state={state}
+        me={me}
+        x={layout.barX}
+        isSource={sourceSet.has(BAR)}
+        isSelected={selected === BAR}
+      />
+      <OffTray state={state} x={layout.trayX} isTarget={targetSet.has(OFF)} />
 
       {/* Sürükleme hayaleti — doğrudan DOM'dan sürülür, render tetiklemez.
           Rengi sürükleme başlarken JS veriyor. */}
@@ -389,11 +488,13 @@ function Checker({
 function BarStack({
   state,
   me,
+  x,
   isSource,
   isSelected,
 }: {
   state: TavlaState;
   me: Player;
+  x: number;
   isSource: boolean;
   isSelected: boolean;
 }) {
@@ -407,7 +508,7 @@ function BarStack({
         "absolute top-0 h-full",
         isSource && "cursor-pointer bg-brand-400/15",
       )}
-      style={{ left: `${BAR_X}%`, width: `${BAR_W}%` }}
+      style={{ left: `${x}%`, width: `${BAR_W}%` }}
     >
       {Array.from({ length: Math.min(state.bar[0], 4) }, (_, i) => (
         <Checker
@@ -431,7 +532,7 @@ function BarStack({
   );
 }
 
-function OffTray({ state, isTarget }: { state: TavlaState; isTarget: boolean }) {
+function OffTray({ state, x, isTarget }: { state: TavlaState; x: number; isTarget: boolean }) {
   return (
     <div
       data-point={OFF}
@@ -442,7 +543,7 @@ function OffTray({ state, isTarget }: { state: TavlaState; isTarget: boolean }) 
         "absolute top-0 h-full transition-colors",
         isTarget && "cursor-pointer bg-good/15 ring-2 ring-inset ring-good/70",
       )}
-      style={{ left: `${TRAY_X}%`, width: `${TRAY_W}%` }}
+      style={{ left: `${x}%`, width: `${TRAY_W}%` }}
     >
       {Array.from({ length: state.off[1] }, (_, i) => (
         <span

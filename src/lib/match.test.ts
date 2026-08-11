@@ -3,7 +3,7 @@ import { after, describe, it } from "node:test";
 
 import { PrismaClient } from "@prisma/client";
 
-import { joinOrCreateOnlineMatch, loadMatch } from "./match";
+import { FIXED_SEATS, joinOrCreateOnlineMatch, loadMatch, seatOf } from "./match";
 
 /**
  * Online eşleşme testleri — gerçek veritabanına vurur.
@@ -76,8 +76,9 @@ describe("online eşleşme", { skip: hasDb ? false : "DATABASE_URL yok" }, () =>
 
     const match = await loadMatch(host.id);
     assert.equal(match?.status, "ACTIVE");
-    assert.equal(match?.seats.bilal, 0);
-    assert.equal(match?.seats.partner, 1);
+    // Koltuklar sabit: Sümeyye 0 (beyaz), Bilal 1 (siyah) — maçı kim açarsa açsın.
+    assert.equal(match?.seats.partner, 0);
+    assert.equal(match?.seats.bilal, 1);
 
     const total = await db.gameMatch.count({ where: { game: "HAFIZA", mode: "ONLINE" } });
     assert.equal(total, 1, "toplam tek maç olmalı");
@@ -104,6 +105,25 @@ describe("online eşleşme", { skip: hasDb ? false : "DATABASE_URL yok" }, () =>
 
     const fresh = await loadMatch(again.id);
     assert.equal(fresh?.status, "WAITING");
+  });
+
+  it("renkler maçı kim açarsa açsın sabit kalır", async () => {
+    await reset();
+
+    // Bu kez Bilal değil Sümeyye açıyor; yine de Sümeyye beyaz (0) olmalı.
+    const host = await joinOrCreateOnlineMatch({
+      game: "HAFIZA",
+      user: "partner",
+      createState: state,
+    });
+    await joinOrCreateOnlineMatch({ game: "HAFIZA", user: "bilal", createState: state });
+
+    const match = await loadMatch(host.id);
+    assert.equal(match?.seats.partner, 0);
+    assert.equal(match?.seats.bilal, 1);
+    assert.equal(seatOf("partner"), 0);
+    assert.equal(seatOf("bilal"), 1);
+    assert.equal(FIXED_SEATS.length, 2);
   });
 
   it("onStart durumu maç başlarken tazeler", async () => {

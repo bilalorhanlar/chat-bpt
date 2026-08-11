@@ -15,7 +15,7 @@
  *    olan çalıyor. Zar ve satranç sesleri hızlı ardışık geldiği için gerekli.
  */
 
-export type SoundName = "zar" | "win" | "lose" | "mars" | "satranc" | "at";
+export type SoundName = "zar" | "win" | "lose" | "mars" | "satranc" | "at" | "place" | "uyari";
 
 const FILES: Record<SoundName, string> = {
   zar: "/ses/zar.mp3",
@@ -24,6 +24,8 @@ const FILES: Record<SoundName, string> = {
   mars: "/ses/mars.mp3",
   satranc: "/ses/satranc.mp3",
   at: "/ses/at.mp3",
+  place: "/ses/place.mp3",
+  uyari: "/ses/uyari.mp3",
 };
 
 /** Kısa efektler üst üste binebilir; uzun olanların tek kopyası yeter. */
@@ -34,6 +36,9 @@ const POOL_SIZE: Record<SoundName, number> = {
   win: 1,
   lose: 1,
   mars: 1,
+  // Pul sesi arka arkaya gelir (zincir hamlede iki kez), havuz gerekli.
+  place: 3,
+  uyari: 1,
 };
 
 const VOLUME: Record<SoundName, number> = {
@@ -43,6 +48,9 @@ const VOLUME: Record<SoundName, number> = {
   win: 0.6,
   lose: 0.6,
   mars: 0.6,
+  place: 0.6,
+  // Uyarı anonsu dikkat çekmeli ama bağırmamalı.
+  uyari: 0.45,
 };
 
 type Pool = { items: HTMLAudioElement[]; next: number };

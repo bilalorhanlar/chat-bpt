@@ -25,6 +25,15 @@ export type Move = {
   hit: boolean;
 };
 
+/**
+ * Bir pulun varabileceği hane ve oraya götüren adımlar.
+ * Tek zarlık hamlede `path` bir elemanlı; iki zar zincirlenmişse iki elemanlı.
+ */
+export type Reach = {
+  to: Point;
+  path: Move[];
+};
+
 export type Result = "NORMAL" | "MARS" | "HAMARS" | "TERK";
 
 export type TavlaState = {

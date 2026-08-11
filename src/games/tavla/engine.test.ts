@@ -10,6 +10,7 @@ import {
   legalMoves,
   mustPass,
   pipCount,
+  reachableFrom,
   roll,
   scoreResult,
   undoTurn,
@@ -320,5 +321,51 @@ describe("bar sabiti", () => {
   it("bar ve off dizin değerleri hane aralığının dışında", () => {
     assert.equal(BAR, -1);
     assert.equal(OFF, 24);
+  });
+});
+
+describe("zincirleme hamleler", () => {
+  it("aynı pul iki zarı da oynayabiliyorsa üç hedef de görünür", () => {
+    // Tek beyaz pul 12'de, zarlar 3 ve 5. Gidebileceği yerler:
+    //   3 ile 9, 5 ile 7, ikisiyle 4.
+    const s = state({ points: points({ 12: 1 }), dice: [3, 5], turn: 0 });
+    const reach = reachableFrom(s, 12)
+      .map((r) => r.to)
+      .sort((a, b) => Number(a) - Number(b));
+    assert.deepEqual(reach, [4, 7, 9]);
+  });
+
+  it("zincirin adımları sırayla veriliyor", () => {
+    const s = state({ points: points({ 12: 1 }), dice: [3, 5], turn: 0 });
+    const far = reachableFrom(s, 12).find((r) => r.to === 4);
+    assert.equal(far?.path.length, 2, "iki zar da kullanılmalı");
+    assert.equal(far?.path[0].from, 12);
+    assert.equal(far?.path.at(-1)?.to, 4);
+    // Adımlar art arda bağlanmalı: birinin hedefi diğerinin kaynağı.
+    assert.equal(far?.path[0].to, far?.path[1].from);
+  });
+
+  it("ara hane kapalıysa o zincir kurulmaz", () => {
+    // 12'den 3 ile 9'a gidilemiyor (kapalı), 5 ile 7'ye gidilip oradan
+    // 3 ile 4'e devam edilebiliyor. Yani 9 hedef listesinde olmamalı.
+    const s = state({ points: points({ 12: 1, 9: -2 }), dice: [3, 5], turn: 0 });
+    const reach = reachableFrom(s, 12)
+      .map((r) => r.to)
+      .sort((a, b) => Number(a) - Number(b));
+    assert.deepEqual(reach, [4, 7]);
+  });
+
+  it("çift zarda dört adıma kadar zincirlenir", () => {
+    const s = state({ points: points({ 20: 1 }), dice: [2, 2, 2, 2], turn: 0 });
+    const reach = reachableFrom(s, 20)
+      .map((r) => r.to)
+      .sort((a, b) => Number(a) - Number(b));
+    assert.deepEqual(reach, [12, 14, 16, 18]);
+  });
+
+  it("toplanan pul zincire devam etmez", () => {
+    const s = state({ points: points({ 0: 5, 1: 5, 2: 5 }), dice: [1, 1, 1, 1], turn: 0 });
+    const off = reachableFrom(s, 0).find((r) => r.to === OFF);
+    assert.equal(off?.path.length, 1, "toplama tek adımdır");
   });
 });
