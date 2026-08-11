@@ -25,7 +25,12 @@ export const GUEST_PIN = "0000";
 
 export type Session =
   | { kind: "kisi"; user: PersonKey }
-  | { kind: "misafir" };
+  /**
+   * Misafir oturumu. `id` girişte üretilen rastgele bir kimlik: misafir
+   * maçları buna bağlanıyor, böylece maç bağlantısını ele geçiren başka bir
+   * misafir oyuna karışamıyor.
+   */
+  | { kind: "misafir"; id: string };
 
 export function isGuest(session: Session | null): boolean {
   return session?.kind === "misafir";
@@ -34,6 +39,11 @@ export function isGuest(session: Session | null): boolean {
 /** Kişi oturumundaki kullanıcı; misafirse null. */
 export function sessionUser(session: Session | null): PersonKey | null {
   return session?.kind === "kisi" ? session.user : null;
+}
+
+/** Misafir oturumunun kimliği; kişi oturumunda null. */
+export function guestId(session: Session | null): string | null {
+  return session?.kind === "misafir" ? session.id : null;
 }
 
 function secret(): Uint8Array {
@@ -52,7 +62,9 @@ function isPersonKey(value: unknown): value is PersonKey {
 
 export async function createSessionToken(session: Session): Promise<string> {
   const payload =
-    session.kind === "kisi" ? { user: session.user } : { misafir: true as const };
+    session.kind === "kisi"
+      ? { user: session.user }
+      : { misafir: true as const, gid: session.id };
 
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -67,7 +79,10 @@ export async function readSessionToken(token: string | undefined): Promise<Sessi
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    if (payload.misafir === true) return { kind: "misafir" };
+    if (payload.misafir === true) {
+      // Kimliksiz eski jetonlar geçersiz: misafir maçı sahipliği buna dayanıyor.
+      return typeof payload.gid === "string" ? { kind: "misafir", id: payload.gid } : null;
+    }
     return isPersonKey(payload.user) ? { kind: "kisi", user: payload.user } : null;
   } catch {
     return null;

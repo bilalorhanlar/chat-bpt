@@ -3,7 +3,7 @@ import { randomInt } from "node:crypto";
 import type { Game, MatchMode, MatchStatus } from "@prisma/client";
 
 import type { PersonKey } from "@/config/site";
-import { isGuest, sessionUser, type Session } from "@/lib/auth";
+import { guestId, isGuest, sessionUser, type Session } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 /**
@@ -28,6 +28,8 @@ export type LoadedMatch = {
   bySeat: Record<number, PersonKey>;
   /** Misafir maçı — şampiyonaya ve rekorlara yazılmaz. */
   guest: boolean;
+  /** Maçı açan misafir oturumunun kimliği. */
+  guestId: string | null;
   ply: number;
 };
 
@@ -64,6 +66,8 @@ export async function createMatch(input: {
   status?: MatchStatus;
   /** Misafir maçı mı — şampiyonaya yazılmaz. */
   guest?: boolean;
+  /** Misafir maçında oturum kimliği; başkası maça karışamasın. */
+  guestId?: string | null;
 }): Promise<string> {
   const other = partnerKey(input.creator);
 
@@ -93,6 +97,7 @@ export async function createMatch(input: {
       status: input.status ?? "ACTIVE",
       state: input.state as never,
       guest: input.guest ?? false,
+      guestId: input.guestId ?? null,
       players: { create: seats },
     },
   });
@@ -125,6 +130,7 @@ export async function loadMatch(id: string): Promise<LoadedMatch | null> {
     seats,
     bySeat,
     guest: row.guest,
+    guestId: row.guestId,
     ply: row._count.moves,
   };
 }
@@ -217,8 +223,15 @@ export async function joinOrCreateOnlineMatch(input: {
  * gerçekten o kişide olması gerekiyor.
  */
 export function canAct(match: LoadedMatch, session: Session, turnSeat: number): boolean {
-  // Misafir maçı tek cihazda oynanıyor; iki tarafı da aynı kişi sürüyor.
-  if (match.guest) return isGuest(session) || sessionUser(session) !== null;
+  /*
+   * Misafir maçı yalnızca **onu açan oturumdan** sürülebilir. Tek cihazda
+   * oynandığı için iki tarafı da aynı oturum oynuyor; ama maç bağlantısını
+   * gören başka bir misafir oyuna karışamamalı.
+   */
+  if (match.guest) {
+    if (!isGuest(session)) return false;
+    return match.guestId !== null && match.guestId === guestId(session);
+  }
 
   const user = sessionUser(session);
   if (user === null) return false; // misafir, misafir olmayan maça karışamaz
@@ -237,7 +250,11 @@ export function matchAccess(
   match: LoadedMatch,
   session: Session,
 ): { allowed: boolean; mySeat: number | null } {
-  if (match.guest) return { allowed: true, mySeat: null };
+  if (match.guest) {
+    const allowed =
+      isGuest(session) && match.guestId !== null && match.guestId === guestId(session);
+    return { allowed, mySeat: null };
+  }
 
   const user = sessionUser(session);
   if (user === null) return { allowed: false, mySeat: null };

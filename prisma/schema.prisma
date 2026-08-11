@@ -86,6 +86,11 @@ model GameMatch {
   /// tablosuna, rekorlara, "devam et" listesine hiç girmez.
   guest Boolean @default(false)
 
+  /// Maçı açan misafir oturumunun kimliği. Misafir maçları yalnızca kendi
+  /// oturumundan sürülebilsin diye: aksi hâlde maç bağlantısını ele geçiren
+  /// başka bir misafir oyuna karışabiliyordu.
+  guestId String?
+
   players MatchPlayer[]
   moves   Move[]
 

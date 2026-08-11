@@ -18,7 +18,7 @@ import {
   type Category,
   type IsimSehirState,
 } from "@/games/isim-sehir/types";
-import { sessionUser } from "@/lib/auth";
+import { guestId, sessionUser } from "@/lib/auth";
 import {
   canAct,
   createMatch,
@@ -84,6 +84,7 @@ export async function createIsimSehirMatch(mode: "ONLINE" | "LOCAL"): Promise<st
       state: initialState(drawLetter(), null),
       status: "ACTIVE",
       guest: true,
+      guestId: guestId(session),
     });
   }
 

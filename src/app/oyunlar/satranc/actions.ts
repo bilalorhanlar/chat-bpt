@@ -12,7 +12,7 @@ import {
   type SatrancState,
   type Seat,
 } from "@/games/satranc/types";
-import { sessionUser } from "@/lib/auth";
+import { guestId, sessionUser } from "@/lib/auth";
 import {
   canAct,
   createMatch,
@@ -68,6 +68,7 @@ export async function createSatrancMatch(mode: "ONLINE" | "LOCAL"): Promise<stri
       state: initialState(Date.now()),
       status: "ACTIVE",
       guest: true,
+      guestId: guestId(session),
     });
   }
 

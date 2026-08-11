@@ -13,7 +13,7 @@ import {
   undoTurn,
 } from "@/games/tavla/engine";
 import type { Player, TavlaState } from "@/games/tavla/types";
-import { sessionUser, type Session } from "@/lib/auth";
+import { guestId, sessionUser, type Session } from "@/lib/auth";
 import {
   canAct,
   createMatch,
@@ -94,6 +94,7 @@ export async function createTavlaMatch(mode: "ONLINE" | "LOCAL"): Promise<string
       state: freshState(),
       status: "ACTIVE",
       guest: true,
+      guestId: guestId(session),
     });
     return id;
   }

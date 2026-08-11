@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { NextResponse, type NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -20,22 +22,38 @@ const Body = z.object({
 });
 
 /* --- kaba kuvvet freni ------------------------------------------------- */
-// İki kişilik bir sitede bellek içi sayaç yeterli: Redis eklemek, korumanın
-// kendisinden daha çok hareketli parça getirirdi. Süreç yeniden başlarsa
-// sayaç sıfırlanır; kabul edilebilir.
+/*
+ * Yalnızca **başarısız** denemeler sayılıyor.
+ *
+ * Önceden her istek sayacı artırıyordu ve başarılı her giriş — misafir girişi
+ * dahil — sayacı sıfırlıyordu. Misafir PIN'i herkese açık olduğu için
+ * saldırgan 9 denemede bir "0000" gönderip sayacı sıfırlayabiliyordu; 4 haneli
+ * PIN'in tek koruması böylece tamamen etkisizdi.
+ *
+ * Bellek içi sayaç iki kişilik bir site için yeterli: Redis eklemek korumanın
+ * kendisinden çok hareketli parça getirirdi. Süreç yeniden başlarsa sayaç
+ * sıfırlanır; kabul edilebilir.
+ */
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
-function rateLimited(ip: string): boolean {
+/** Sayacı artırmadan yalnızca bakar. */
+function isBlocked(ip: string): boolean {
+  const entry = attempts.get(ip);
+  if (!entry || Date.now() > entry.resetAt) return false;
+  return entry.count >= MAX_ATTEMPTS;
+}
+
+/** Yanlış PIN denemesini kaydeder. */
+function registerFailure(ip: string) {
   const now = Date.now();
   const entry = attempts.get(ip);
   if (!entry || now > entry.resetAt) {
     attempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
+    return;
   }
   entry.count++;
-  return entry.count > MAX_ATTEMPTS;
 }
 
 function clearAttempts(ip: string) {
@@ -54,7 +72,7 @@ export async function POST(request: NextRequest) {
     request.headers.get("x-real-ip") ??
     "yerel";
 
-  if (rateLimited(ip)) {
+  if (isBlocked(ip)) {
     return NextResponse.json(
       { error: "Çok fazla deneme yaptın. 15 dakika sonra tekrar dene." },
       { status: 429 },
@@ -67,12 +85,14 @@ export async function POST(request: NextRequest) {
   }
 
   /*
-   * Misafir PIN'i ortak PIN'den önce kontrol ediliyor ve "kimsin?" adımı
-   * yok: misafirin kimliği olmadığı için doğrudan oturum açılıyor.
+   * Misafir PIN'i ortak PIN'den önce kontrol ediliyor ve "kimsin?" adımı yok.
+   *
+   * Sayaca dokunulmuyor: misafir PIN'i zaten herkese açık, tahmin edilecek bir
+   * sırrı yok. Sıfırlasaydık yanlış PIN denemelerinin sayacını temizlerdi;
+   * artırsaydık arkadaşlar girdikçe ev sahiplerini kilitlerdi.
    */
   if (parsed.data.pin === GUEST_PIN) {
-    clearAttempts(ip);
-    const token = await createSessionToken({ kind: "misafir" });
+    const token = await createSessionToken({ kind: "misafir", id: randomUUID() });
     const response = NextResponse.json({ ok: true, misafir: true });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(true));
     return response;
@@ -87,6 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!(await bcrypt.compare(parsed.data.pin, hash))) {
+    registerFailure(ip);
     return NextResponse.json({ error: "PIN yanlış." }, { status: 401 });
   }
 
