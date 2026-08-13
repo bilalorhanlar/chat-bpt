@@ -13,6 +13,7 @@ export function PlayerBar({
   off,
   clock,
   captured,
+  className,
 }: {
   person: { name: string; accent: string };
   /** Sıra bu oyuncuda mı — şerit vurgulanır. */
@@ -29,12 +30,15 @@ export function PlayerBar({
   clock?: number | null;
   /** Satranç: aldığı taşlar. */
   captured?: React.ReactNode;
+  /** Yerleşime göre daraltmak için (yatay tavla şeridi gibi). */
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "flex items-center gap-3 rounded-2xl border px-4 py-2.5 transition-colors duration-300",
         active ? "border-ink bg-white shadow-soft" : "border-line bg-white/70",
+        className,
       )}
     >
       <span

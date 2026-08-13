@@ -50,8 +50,11 @@
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
-/* Yatay tutulan telefon: tavla düzeni bu kırılımda iki sütuna geçiyor. */
-@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 540px));
+/* Yatay tutulan telefon: tavla tahtası bu kırılımda tam ekrana geçiyor.
+   540px kimi telefonu (ve tarayıcı çubuğu görünürken kimi ölçümü) dışarıda
+   bırakıyordu, 620'ye çıkarıldı. Genişlik sınırı `lg:` ile çakışmayı kesiyor:
+   yatay telefon 1024px'ten dar, masaüstü penceresi değil. */
+@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 620px) and (max-width: 1023px));
 
 /* ---------------------------------------------------------------------------
    Temel
@@ -90,6 +93,14 @@
     outline: 2px solid var(--color-brand-500);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+
+  /* Tavla yatayda tam ekran bir katman açıyor; arkadaki sayfa kaymasın —
+     yoksa parmak tahtanın dışına taştığında altındaki sayfa kayıyor. */
+  @media (orientation: landscape) and (max-height: 620px) and (max-width: 1023px) {
+    body:has(.tavla-tam-ekran) {
+      overflow: hidden;
+    }
   }
 
   /* iOS'ta 16px altı input'a odaklanınca sayfa zoom'lar. */

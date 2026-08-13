@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { BAR, OFF, type Player, type Reach, type TavlaState } from "@/games/tavla/types";
+import { BAR, OFF, type Player, type Point, type Reach, type TavlaState } from "@/games/tavla/types";
 import { cn } from "@/lib/utils";
 
 /** Tahta yönü: hangi tarafa toplanacağı ve hangi yarının altta olduğu. */
@@ -113,6 +113,29 @@ const BAR_X = FRAME + 6 * POINT_W;
 /** Sürükleme sayılması için gereken piksel — altı dokunma kabul edilir. */
 const DRAG_THRESHOLD = 8;
 
+/** Oynanan pulun kaynaktan hedefe kayma süresi. */
+export const FLIGHT_MS = 260;
+
+/**
+ * Pul yüzü — tek kaynak.
+ * Üç yerde çiziliyor: yığındaki pul, sürükleme hayaleti ve kayan pul. Üçü
+ * ayrı ayrı yazılınca kaçınılmaz olarak ayrışıyordu.
+ */
+const CHECKER_FACE: Record<Player, { background: string; border: string; boxShadow: string }> = {
+  0: {
+    background: "radial-gradient(circle at 35% 30%, #FFFFFF 0%, #F1EDE3 45%, #DDD5C4 100%)",
+    border: "1px solid #A89F8F",
+    boxShadow:
+      "inset 0 0 0 3px rgb(255 255 255 / 0.8), inset 0 0 0 4px rgb(168 159 143 / 0.6), 0 2px 4px -1px rgb(0 0 0 / 0.35)",
+  },
+  1: {
+    background: "radial-gradient(circle at 35% 30%, #575046 0%, #35302A 45%, #1D1915 100%)",
+    border: "1px solid rgba(0,0,0,0.75)",
+    boxShadow:
+      "inset 0 0 0 3px rgb(255 255 255 / 0.14), inset 0 0 0 4px rgb(0 0 0 / 0.4), 0 2px 4px -1px rgb(0 0 0 / 0.5)",
+  },
+};
+
 type Slot = { index: number; x: number; top: boolean };
 
 /** Varsayılan yerleşim: 13–18 üst sol, 19–24 üst sağ, 12–7 alt sol, 6–1 alt sağ. */
@@ -146,10 +169,69 @@ function layoutFor(orientation: { flipX: boolean; flipY: boolean }) {
 
   return {
     slots,
+    byIndex: new Map(slots.map((slot) => [slot.index, slot])),
     barX: orientation.flipX ? mirror(BAR_X, BAR_W) : BAR_X,
     trayX: orientation.flipX ? mirror(TRAY_X, TRAY_W) : TRAY_X,
   };
 }
+
+type Layout = ReturnType<typeof layoutFor>;
+
+/** Yığındaki pulların dikey aralığı — beşten sonrası sütuna sıkışır. */
+function stackStep(total: number): number {
+  if (total <= 5) return CHECKER_H_BOARD;
+  return (((100 - CHECKER_H_LOCAL) / (total - 1)) / 100) * HALF_H;
+}
+
+/**
+ * Bir pulun tahta kutusuna göre **merkezi** (yüzde).
+ *
+ * Kayma animasyonu iki noktayı da tahta yüzdesinde istiyor; sütun içi yerel
+ * yüzdeler (bkz. dosya başı) burada tahta yüzdesine çevriliyor.
+ */
+function checkerCenter(
+  layout: Layout,
+  point: Point,
+  player: Player,
+  /** Yığındaki sıra, 0 = dipteki. */
+  stackIndex: number,
+  /** Yığındaki toplam pul. */
+  total: number,
+): { x: number; y: number } {
+  if (point === BAR) {
+    const i = Math.min(stackIndex, 3);
+    const offset = 28 + i * CHECKER_H_BOARD * 0.75 + CHECKER_H_BOARD / 2;
+    return { x: layout.barX + BAR_W / 2, y: player === 0 ? 100 - offset : offset };
+  }
+
+  if (point === OFF) {
+    const offset = FRAME + Math.max(0, stackIndex) * 2.6 + 0.8;
+    return { x: layout.trayX + TRAY_W / 2, y: player === 0 ? 100 - offset : offset };
+  }
+
+  const slot = layout.byIndex.get(point);
+  if (!slot) return { x: 50, y: 50 };
+
+  const offset =
+    FRAME + Math.min(stackIndex, 4) * stackStep(total) + CHECKER_H_BOARD / 2;
+  return { x: slot.x + POINT_W / 2, y: slot.top ? offset : 100 - offset };
+}
+
+/**
+ * Kayan pul.
+ *
+ * Hamle sunucudan döndüğünde tahta zaten yeni durumu çiziyor; göz bunu ışınlanma
+ * olarak görüyordu. Bu tarif, hedefteki pulu bir anlığına gizleyip yerine
+ * kaynaktan kayan bir kopya koymaya yarıyor. Rakibin hamlesi de soketten
+ * gelirken aynı şekilde canlanıyor.
+ */
+export type Flight = {
+  /** Her hamlede artar; aynı uçuş iki kez oynatılmasın. */
+  key: number;
+  from: Point;
+  to: Point;
+  player: Player;
+};
 
 export type BoardProps = {
   state: TavlaState;
@@ -159,6 +241,8 @@ export type BoardProps = {
   targets: Reach[];
   sources: number[];
   orientation: { flipX: boolean; flipY: boolean };
+  /** Süren kayma animasyonu; yoksa null. */
+  flight?: Flight | null;
   onSelect: (index: number) => void;
   onMoveTo: (to: number) => void;
   disabled?: boolean;
@@ -171,6 +255,7 @@ export function TavlaBoard({
   targets,
   sources,
   orientation,
+  flight,
   onSelect,
   onMoveTo,
   disabled,
@@ -247,11 +332,8 @@ export function TavlaBoard({
         const dy = e.clientY - d.startY;
         if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
         d.moved = true;
-        ghost.style.background =
-          d.player === 0
-            ? "radial-gradient(circle at 35% 30%, #FFFFFF 0%, #F1EDE3 45%, #DDD5C4 100%)"
-            : "radial-gradient(circle at 35% 30%, #575046 0%, #35302A 45%, #1D1915 100%)";
-        ghost.style.border = d.player === 0 ? "1px solid #A89F8F" : "1px solid rgba(0,0,0,0.75)";
+        ghost.style.background = CHECKER_FACE[d.player].background;
+        ghost.style.border = CHECKER_FACE[d.player].border;
         ghost.style.opacity = "1";
       }
       moveGhost(e.clientX, e.clientY);
@@ -316,6 +398,9 @@ export function TavlaBoard({
           isSelected={selected === slot.index}
           isSource={sourceSet.has(slot.index)}
           isTarget={targetSet.has(slot.index)}
+          // Kayan pul varmadan hedefteki en üst pul çizilmez; yoksa aynı pul
+          // hem uçarken hem yerinde görünürdü.
+          hideTop={flight?.to === slot.index}
         />
       ))}
 
@@ -326,7 +411,14 @@ export function TavlaBoard({
         isSource={sourceSet.has(BAR)}
         isSelected={selected === BAR}
       />
-      <OffTray state={state} x={layout.trayX} isTarget={targetSet.has(OFF)} />
+      <OffTray
+        state={state}
+        x={layout.trayX}
+        isTarget={targetSet.has(OFF)}
+        hideTopOf={flight?.to === OFF ? flight.player : null}
+      />
+
+      {flight ? <FlyingChecker flight={flight} layout={layout} state={state} /> : null}
 
       {/* Sürükleme hayaleti — doğrudan DOM'dan sürülür, render tetiklemez.
           Rengi sürükleme başlarken JS veriyor. */}
@@ -342,18 +434,97 @@ export function TavlaBoard({
 
 /* ------------------------------------------------------------------ */
 
-function PointColumn({
+/**
+ * Kaynaktan hedefe kayan pul.
+ *
+ * Hedefte konumlanıp *kaynağa* doğru ötelenmiş halde doğuyor, sonraki karede
+ * öteleme sıfırlanınca CSS geçişi onu yerine taşıyor. Böylece animasyon
+ * yalnızca `transform` — `left/top` animasyonu her karede yerleşim hesabı
+ * demekti.
+ *
+ * Ötelemeler pulun kendi boyutunun yüzdesi: CSS'te `translate` yüzdeleri
+ * elemanın kendi kutusuna göre çözülüyor, tahtanınkine göre değil.
+ */
+function FlyingChecker({
+  flight,
+  layout,
+  state,
+}: {
+  flight: Flight;
+  layout: Layout;
+  state: TavlaState;
+}) {
+  // Durum "hangi uçuş yola çıktı" olarak tutuluyor, düz bir bayrak olarak
+  // değil: arka arkaya iki hamlede bileşen sökülmüyor, yeni anahtarla aynı
+  // yerde kalıyor. Bayrak olsaydı yeni uçuş bir kare hedefte görünüp geri
+  // sıçrardı.
+  const [departedKey, setDepartedKey] = useState<number | null>(null);
+  const departed = departedKey === flight.key;
+
+  useEffect(() => {
+    // İki kare beklemek şart: aynı karede hem konum hem geçiş verilirse
+    // tarayıcı ikisini birleştirip animasyonu atlıyor.
+    let inner = 0;
+    const key = flight.key;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setDepartedKey(key));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [flight.key]);
+
+  const { player, from, to } = flight;
+
+  // Konumlar hamle **sonrası** durumdan okunuyor: kaynakta bir pul eksildi,
+  // hedefte bir tane arttı.
+  const fromTotal =
+    from === BAR ? state.bar[player] + 1 : Math.abs(state.points[from as number]) + 1;
+  const start = checkerCenter(layout, from, player, fromTotal - 1, fromTotal);
+
+  const toTotal = to === OFF ? state.off[player] : Math.abs(state.points[to as number]);
+  const end = checkerCenter(layout, to, player, Math.max(0, toTotal - 1), toTotal);
+
+  const dx = ((start.x - end.x) / CHECKER_W_BOARD) * 100;
+  const dy = ((start.y - end.y) / CHECKER_H_BOARD) * 100;
+
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute z-[25] rounded-full"
+      style={{
+        left: `${end.x}%`,
+        top: `${end.y}%`,
+        width: `${CHECKER_W_BOARD}%`,
+        aspectRatio: "1",
+        transform: departed
+          ? "translate(-50%, -50%)"
+          : `translate(-50%, -50%) translate(${dx}%, ${dy}%)`,
+        transition: departed ? `transform ${FLIGHT_MS}ms var(--ease-out-soft)` : "none",
+        ...CHECKER_FACE[player],
+      }}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const PointColumn = memo(function PointColumn({
   slot,
   count,
   isSelected,
   isSource,
   isTarget,
+  hideTop,
 }: {
   slot: Slot;
   count: number;
   isSelected: boolean;
   isSource: boolean;
   isTarget: boolean;
+  /** Kayan pul yolda: en üstteki çizilmez. */
+  hideTop?: boolean;
 }) {
   const owner: Player | null = count > 0 ? 0 : count < 0 ? 1 : null;
   const total = Math.abs(count);
@@ -418,6 +589,7 @@ function PointColumn({
       ) : null}
 
       {Array.from({ length: visible }, (_, i) => {
+        if (hideTop && i === visible - 1) return null;
         const step = total <= 5 ? CHECKER_H_LOCAL : (100 - CHECKER_H_LOCAL) / (total - 1);
         return (
           <Checker
@@ -440,7 +612,7 @@ function PointColumn({
       ) : null}
     </div>
   );
-}
+});
 
 /**
  * Pul: hafif üç boyut hissi veren radyal degrade + kenar çizgisi.
@@ -469,16 +641,10 @@ function Checker({
       style={{
         width: `${widthPct}%`,
         aspectRatio: "1",
-        background:
-          player === 0
-            ? "radial-gradient(circle at 35% 30%, #FFFFFF 0%, #F1EDE3 45%, #DDD5C4 100%)"
-            : "radial-gradient(circle at 35% 30%, #575046 0%, #35302A 45%, #1D1915 100%)",
-        border: player === 0 ? "1px solid #A89F8F" : "1px solid rgba(0,0,0,0.75)",
+        ...CHECKER_FACE[player],
         boxShadow: highlighted
           ? "0 0 0 3px rgb(139 92 246 / 0.85), 0 4px 10px -2px rgb(0 0 0 / 0.4)"
-          : player === 0
-            ? "inset 0 0 0 3px rgb(255 255 255 / 0.8), inset 0 0 0 4px rgb(168 159 143 / 0.6), 0 2px 4px -1px rgb(0 0 0 / 0.35)"
-            : "inset 0 0 0 3px rgb(255 255 255 / 0.14), inset 0 0 0 4px rgb(0 0 0 / 0.4), 0 2px 4px -1px rgb(0 0 0 / 0.5)",
+          : CHECKER_FACE[player].boxShadow,
         ...style,
       }}
     />
@@ -532,7 +698,23 @@ function BarStack({
   );
 }
 
-function OffTray({ state, x, isTarget }: { state: TavlaState; x: number; isTarget: boolean }) {
+function OffTray({
+  state,
+  x,
+  isTarget,
+  hideTopOf,
+}: {
+  state: TavlaState;
+  x: number;
+  isTarget: boolean;
+  /** Bu oyuncunun en son toplanan pulu yolda: çizilmez. */
+  hideTopOf: Player | null;
+}) {
+  const shown: [number, number] = [
+    state.off[0] - (hideTopOf === 0 ? 1 : 0),
+    state.off[1] - (hideTopOf === 1 ? 1 : 0),
+  ];
+
   return (
     <div
       data-point={OFF}
@@ -545,14 +727,14 @@ function OffTray({ state, x, isTarget }: { state: TavlaState; x: number; isTarge
       )}
       style={{ left: `${x}%`, width: `${TRAY_W}%` }}
     >
-      {Array.from({ length: state.off[1] }, (_, i) => (
+      {Array.from({ length: Math.max(0, shown[1]) }, (_, i) => (
         <span
           key={`b${i}`}
           className="absolute left-1/2 h-[1.6%] w-[70%] -translate-x-1/2 rounded-full border border-black/60 bg-[#35302A]"
           style={{ top: `${FRAME + i * 2.6}%` }}
         />
       ))}
-      {Array.from({ length: state.off[0] }, (_, i) => (
+      {Array.from({ length: Math.max(0, shown[0]) }, (_, i) => (
         <span
           key={`w${i}`}
           className="absolute left-1/2 h-[1.6%] w-[70%] -translate-x-1/2 rounded-full border border-[#A89F8F] bg-[#F5F1E8]"

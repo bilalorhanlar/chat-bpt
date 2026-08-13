@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -108,7 +108,12 @@ function Die({
   );
 }
 
-export function Dice3D({
+/**
+ * `memo` şart: üst bileşen her seçimde, her saniyede yeniden çiziliyor ve
+ * sahne ağacını boşuna uzlaştırmak telefonda takılmaya yol açıyordu. Zar
+ * yalnızca değeri ya da atış anahtarı değişince yeniden çizilir.
+ */
+export const Dice3D = memo(function Dice3D({
   dice,
   rollKey,
   className,
@@ -172,4 +177,4 @@ export function Dice3D({
       </Canvas>
     </div>
   );
-}
+});
